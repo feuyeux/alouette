@@ -38,13 +38,31 @@ async fn translate_text(request: TranslationRequest) -> Result<TranslationRespon
 async fn call_ollama_translate(text: &str, target_lang: &str) -> Result<String, String> {
     let client = reqwest::Client::new();
     
+    // 将中文语言名称转换为英文用于更好的翻译效果
+    let english_lang = match target_lang {
+        "英语" | "英文" => "English",
+        "日语" => "Japanese", 
+        "韩语" => "Korean",
+        "法语" => "French",
+        "德语" => "German",
+        "西班牙语" => "Spanish",
+        "俄语" => "Russian",
+        "意大利语" => "Italian",
+        "印地语" => "Hindi",
+        "希腊语" => "Greek",
+        "阿拉伯语" => "Arabic",
+        _ => target_lang,
+    };
+    
     let prompt = format!(
-        "请将以下文本翻译成{}，只返回翻译结果，不要其他解释：\n{}",
-        target_lang, text
+        "请将以下中文文本翻译成{}，只返回翻译结果，不要其他解释：\n{}",
+        english_lang, text
     );
     
+    println!("翻译请求 - 目标语言: {} ({}), 文本: {}", target_lang, english_lang, text);
+    
     let request_body = serde_json::json!({
-        "model": "qwen2.5:4b",
+        "model": "qwen3:1.7b",
         "prompt": prompt,
         "stream": false
     });
@@ -124,31 +142,64 @@ async fn load_saved_texts() -> Result<Vec<SavedText>, String> {
 
 #[command]
 async fn play_tts(text: String, lang: String) -> Result<(), String> {
-    // 这里使用系统的 TTS 命令，你可以根据需要调整
+    // 语言映射 - 支持中文语言名称并映射到espeak可用的语音
     let command = match lang.as_str() {
         "中文" | "Chinese" => format!("espeak -v zh \"{}\"", text),
-        "英文" | "English" => format!("espeak -v en \"{}\"", text),
-        "日语" | "Japanese" => format!("espeak -v ja \"{}\"", text),
-        "韩语" | "Korean" => format!("espeak -v ko \"{}\"", text),
+        "英语" | "英文" | "English" => format!("espeak -v en \"{}\"", text),
+        "日语" | "Japanese" => {
+            // 日语不直接支持，使用英语作为fallback
+            format!("espeak -v en \"{}\"", text)
+        },
+        "韩语" | "Korean" => {
+            // 韩语不直接支持，使用英语作为fallback
+            format!("espeak -v en \"{}\"", text)
+        },
         "法语" | "French" => format!("espeak -v fr \"{}\"", text),
         "德语" | "German" => format!("espeak -v de \"{}\"", text),
         "西班牙语" | "Spanish" => format!("espeak -v es \"{}\"", text),
-        _ => format!("espeak \"{}\"", text),
+        "俄语" | "Russian" => format!("espeak -v ru \"{}\"", text),
+        "意大利语" | "Italian" => format!("espeak -v it \"{}\"", text),
+        "印地语" | "Hindi" => format!("espeak -v hi \"{}\"", text),
+        "希腊语" | "Greek" => format!("espeak -v el \"{}\"", text),
+        "阿拉伯语" | "Arabic" => {
+            // 阿拉伯语espeak不支持，使用英语作为fallback
+            println!("警告: espeak不支持阿拉伯语，使用英语语音");
+            format!("espeak -v en \"{}\"", text)
+        },
+        _ => {
+            println!("未知语言 '{}', 使用默认语音", lang);
+            format!("espeak \"{}\"", text)
+        },
     };
     
-    tokio::process::Command::new("sh")
+    println!("执行TTS命令: {}", command);
+    
+    let output = tokio::process::Command::new("sh")
         .arg("-c")
         .arg(&command)
         .output()
         .await
         .map_err(|e| format!("TTS 播放失败: {}", e))?;
     
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("TTS 错误输出: {}", stderr);
+        return Err(format!("TTS 命令执行失败: {}", stderr));
+    }
+    
+    println!("TTS 播放成功");
     Ok(())
+}
+
+#[command]
+fn greet(name: &str) -> String {
+    format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            greet,
             translate_text,
             save_translation,
             load_saved_texts,

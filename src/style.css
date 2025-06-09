@@ -28,6 +28,31 @@ header h1 {
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+.environment-info {
+  margin-top: 15px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
+}
+
+.env-badge {
+  background: #ffc107;
+  color: #000;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  display: inline-block;
+}
+
+.environment-info small {
+  display: block;
+  opacity: 0.9;
+  font-size: 12px;
+}
+
 /* Main Container */
 main {
   max-width: 1000px;
@@ -40,8 +65,7 @@ main {
 
 /* Section Styles */
 .translation-section,
-.results-section,
-.history-section {
+.results-section {
   margin-bottom: 30px;
   padding: 25px;
   border-radius: 12px;
@@ -50,8 +74,7 @@ main {
 }
 
 .translation-section h2,
-.results-section h2,
-.history-section h2 {
+.results-section h2 {
   color: #333;
   margin-bottom: 20px;
   font-size: 1.5em;
@@ -150,6 +173,7 @@ main {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+  animation: pulse 1.5s infinite;
 }
 
 .play-btn,
@@ -239,73 +263,6 @@ main {
   margin-bottom: 10px;
 }
 
-/* History Section */
-.no-history {
-  text-align: center;
-  color: #6c757d;
-  font-style: italic;
-  padding: 30px;
-}
-
-.history-item {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 15px;
-  border: 1px solid #e1e5e9;
-  transition: all 0.3s ease;
-}
-
-.history-item:hover {
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
-}
-
-.history-header {
-  margin-bottom: 10px;
-}
-
-.timestamp {
-  background: #6c757d;
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.history-original {
-  margin-bottom: 15px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 3px solid #667eea;
-}
-
-.history-original strong {
-  color: #667eea;
-}
-
-.history-translations {
-  display: grid;
-  gap: 8px;
-}
-
-.history-translation {
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 3px solid #28a745;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.history-translation strong {
-  color: #28a745;
-  min-width: 80px;
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
   #app {
@@ -326,8 +283,7 @@ main {
   }
   
   .translation-section,
-  .results-section,
-  .history-section {
+  .results-section {
     padding: 15px;
   }
 }
@@ -337,8 +293,4 @@ main {
   0% { opacity: 1; }
   50% { opacity: 0.7; }
   100% { opacity: 1; }
-}
-
-.translate-btn:disabled {
-  animation: pulse 1.5s infinite;
 }

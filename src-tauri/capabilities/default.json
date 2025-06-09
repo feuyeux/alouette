@@ -5,6 +5,18 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
-  ]
+    "core:window:default",
+    "core:app:default",
+    "core:resources:default",
+    "core:menu:default",
+    "core:tray:default"
+  ],
+  "commands": {
+    "allow": [
+      "translate_text",
+      "save_translation",
+      "load_saved_texts",
+      "play_tts"
+    ]
+  }
 }
