@@ -19,6 +19,10 @@ struct OllamaRequest {
     model: String,
     prompt: String,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,29 +63,79 @@ fn get_language_name(code: &str) -> String {
 }
 
 fn clean_translation_response(response: &str) -> String {
-    // Remove common AI model artifacts and keep only the translation
-    let cleaned = response
+    // Remove common AI model artifacts and thinking indicators
+    let mut cleaned = response
         .trim()
         .replace("<think>", "")
         .replace("</think>", "")
+        .replace("<thinking>", "")
+        .replace("</thinking>", "")
         .replace("<|im_start|>", "")
         .replace("<|im_end|>", "");
+
+    // Remove common explanation prefixes
+    let prefixes_to_remove = [
+        "Translation:",
+        "翻译结果:",
+        "翻译:",
+        "Result:",
+        "答案:",
+        "Answer:",
+        "The translation is:",
+        "Here is the translation:",
+        "这个翻译是:",
+        "翻译如下:",
+        "Direct translation:",
+        "Translation result:",
+    ];
     
-    // Split by lines and take the last non-empty line as the translation
-    let lines: Vec<&str> = cleaned.lines().collect();
-    for line in lines.iter().rev() {
-        let trimmed = line.trim();
-        if !trimmed.is_empty() && 
-           !trimmed.starts_with("Translation:") &&
-           !trimmed.starts_with("Answer:") &&
-           !trimmed.starts_with("Result:") &&
-           !trimmed.contains("translate") {
-            return trimmed.to_string();
+    for prefix in &prefixes_to_remove {
+        if cleaned.trim().starts_with(prefix) {
+            cleaned = cleaned.trim()[prefix.len()..].trim().to_string();
         }
     }
+
+    // Remove lines containing thinking processes
+    let lines: Vec<&str> = cleaned.lines().collect();
+    let mut final_lines = Vec::new();
     
+    for line in &lines {
+        let line_lower = line.to_lowercase();
+        let is_thinking_line = line_lower.contains("let me think") ||
+                              line_lower.contains("first,") ||
+                              line_lower.contains("however,") ||
+                              line_lower.contains("actually,") ||
+                              line_lower.contains("i need to") ||
+                              line_lower.contains("思考") ||
+                              line_lower.contains("首先") ||
+                              line_lower.contains("然而") ||
+                              line_lower.contains("实际上") ||
+                              line_lower.contains("我需要") ||
+                              (line_lower.contains("translate") && line_lower.contains("to")) ||
+                              line_lower.contains("explanation") ||
+                              line_lower.contains("reasoning");
+        
+        if !is_thinking_line && !line.trim().is_empty() {
+            final_lines.push(line.trim());
+        }
+    }
+
+    // If we have multiple lines, take the last meaningful one
+    if final_lines.len() > 1 {
+        for line in final_lines.iter().rev() {
+            if line.len() > 2 && !line.ends_with(':') {
+                return line.to_string();
+            }
+        }
+    }
+
+    // If we still have content, return the cleaned version
+    if !final_lines.is_empty() {
+        return final_lines.join(" ").trim().to_string();
+    }
+
     // Fallback to cleaned response
-    cleaned
+    cleaned.trim().to_string()
 }
 
 #[tauri::command]
@@ -93,7 +147,7 @@ async fn translate_text(request: TranslationRequest) -> Result<Vec<TranslationRe
 
         // Create prompt for Ollama
         let prompt = format!(
-            "Translate \"{}\" to {}: ",
+            "Translate \"{}\" to {}. Return only the direct translation without any explanation or reasoning: ",
             request.text,
             lang_name
         );
@@ -103,6 +157,14 @@ async fn translate_text(request: TranslationRequest) -> Result<Vec<TranslationRe
             model: "qwen3:1.7b".to_string(), // 使用可用的qwen3:1.7b模型
             prompt,
             stream: false,
+            system: Some("You are a translation assistant. Provide only direct translations without explanations, reasoning, or additional commentary.".to_string()),
+            options: Some(serde_json::json!({
+                "temperature": 0.1,
+                "top_p": 0.9,
+                "top_k": 10,
+                "repeat_penalty": 1.1,
+                "num_predict": 50
+            })),
         };
 
         match call_ollama(ollama_request).await {

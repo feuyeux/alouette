@@ -1,7 +1,7 @@
 {
-  "productName": "alouette",
+  "productName": "Alouette",
   "version": "0.1.0",
-  "identifier": "com.alouette.dev",
+  "identifier": "com.alouette.app",
   "build": {
     "beforeDevCommand": "vite --port 1420 --strictPort",
     "beforeBuildCommand": "npm run vite:build",

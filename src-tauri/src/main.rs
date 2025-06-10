@@ -8,6 +8,8 @@ use tauri::command;
 struct TranslationRequest {
     text: String,
     target_languages: Vec<String>,
+    ollama_url: String,
+    model_name: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -28,14 +30,14 @@ async fn translate_text(request: TranslationRequest) -> Result<TranslationRespon
     let mut translations = HashMap::new();
     
     for lang in &request.target_languages {
-        let translation = call_ollama_translate(&request.text, lang).await?;
+        let translation = call_ollama_translate(&request.text, lang, &request.ollama_url, &request.model_name).await?;
         translations.insert(lang.clone(), translation);
     }
     
     Ok(TranslationResponse { translations })
 }
 
-async fn call_ollama_translate(text: &str, target_lang: &str) -> Result<String, String> {
+async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &str, model_name: &str) -> Result<String, String> {
     let client = reqwest::Client::new();
     
     // 将中文语言名称转换为英文用于更好的翻译效果
@@ -55,20 +57,31 @@ async fn call_ollama_translate(text: &str, target_lang: &str) -> Result<String, 
     };
     
     let prompt = format!(
-        "请将以下中文文本翻译成{}，只返回翻译结果，不要其他解释：\n{}",
+        "Translate the following text to {}. Return only the direct translation without any explanation, reasoning, or additional text:\n\n{}",
         english_lang, text
     );
     
-    println!("翻译请求 - 目标语言: {} ({}), 文本: {}", target_lang, english_lang, text);
+    println!("翻译请求 - 目标语言: {} ({}), 文本: {}, 服务器: {}, 模型: {}", 
+             target_lang, english_lang, text, ollama_url, model_name);
     
     let request_body = serde_json::json!({
-        "model": "qwen3:1.7b",
+        "model": model_name,
         "prompt": prompt,
-        "stream": false
+        "stream": false,
+        "options": {
+            "temperature": 0.1,
+            "top_p": 0.9,
+            "top_k": 10,
+            "repeat_penalty": 1.1,
+            "num_predict": 50
+        },
+        "system": "You are a translation assistant. Provide only direct translations without explanations, reasoning, or additional commentary."
     });
     
+    let api_url = format!("{}/api/generate", ollama_url.trim_end_matches('/'));
+    
     let response = client
-        .post("http://localhost:11434/api/generate")
+        .post(&api_url)
         .json(&request_body)
         .send()
         .await
@@ -85,10 +98,78 @@ async fn call_ollama_translate(text: &str, target_lang: &str) -> Result<String, 
     let translation = response_json["response"]
         .as_str()
         .unwrap_or("")
-        .trim()
-        .to_string();
+        .trim();
     
-    Ok(translation)
+    // Clean the response to remove any thinking process or explanations
+    let cleaned_translation = clean_ollama_response(translation);
+    
+    Ok(cleaned_translation)
+}
+
+fn clean_ollama_response(response: &str) -> String {
+    let response = response.trim();
+    
+    // Remove common prefixes that indicate explanations
+    let prefixes_to_remove = [
+        "Translation:",
+        "翻译结果:",
+        "翻译:",
+        "Result:",
+        "答案:",
+        "Answer:",
+        "The translation is:",
+        "Here is the translation:",
+        "这个翻译是:",
+        "翻译如下:",
+    ];
+    
+    let mut cleaned = response.to_string();
+    for prefix in &prefixes_to_remove {
+        if cleaned.starts_with(prefix) {
+            cleaned = cleaned[prefix.len()..].trim().to_string();
+        }
+    }
+    
+    // Remove thinking indicators
+    let thinking_indicators = [
+        "<think>", "</think>",
+        "<thinking>", "</thinking>",
+        "Let me think", "思考",
+        "I need to", "我需要",
+        "First,", "首先,",
+        "However,", "然而,",
+        "Actually,", "实际上,",
+    ];
+    
+    for indicator in &thinking_indicators {
+        if cleaned.contains(indicator) {
+            // If we find thinking indicators, try to extract just the final result
+            let lines: Vec<&str> = cleaned.lines().collect();
+            for line in lines.iter().rev() {
+                let line = line.trim();
+                if !line.is_empty() && 
+                   !thinking_indicators.iter().any(|&ind| line.contains(ind)) &&
+                   line.len() > 2 {
+                    return line.to_string();
+                }
+            }
+        }
+    }
+    
+    // Split by sentences and take the last meaningful one
+    let sentences: Vec<&str> = cleaned.split(&['.', '。', '!', '?', '！', '？'][..]).collect();
+    for sentence in sentences.iter().rev() {
+        let sentence = sentence.trim();
+        if !sentence.is_empty() && 
+           !sentence.to_lowercase().contains("translat") &&
+           !sentence.contains("解释") &&
+           !sentence.contains("说明") &&
+           sentence.len() > 2 {
+            return sentence.to_string();
+        }
+    }
+    
+    cleaned
 }
 
 #[command]
@@ -192,6 +273,38 @@ async fn play_tts(text: String, lang: String) -> Result<(), String> {
 }
 
 #[command]
+async fn test_ollama_connection(ollama_url: String) -> Result<Vec<String>, String> {
+    let client = reqwest::Client::new();
+    let api_url = format!("{}/api/tags", ollama_url.trim_end_matches('/'));
+    
+    println!("测试Ollama连接: {}", api_url);
+    
+    let response = client
+        .get(&api_url)
+        .send()
+        .await
+        .map_err(|e| format!("连接失败: {}", e))?;
+    
+    let response_text = response
+        .text()
+        .await
+        .map_err(|e| format!("读取响应失败: {}", e))?;
+    
+    let response_json: serde_json::Value = serde_json::from_str(&response_text)
+        .map_err(|e| format!("解析响应失败: {}", e))?;
+    
+    let models = response_json["models"]
+        .as_array()
+        .unwrap_or(&vec![])
+        .iter()
+        .filter_map(|model| model["name"].as_str())
+        .map(|name| name.to_string())
+        .collect();
+    
+    Ok(models)
+}
+
+#[command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
@@ -203,7 +316,8 @@ fn main() {
             translate_text,
             save_translation,
             load_saved_texts,
-            play_tts
+            play_tts,
+            test_ollama_connection
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

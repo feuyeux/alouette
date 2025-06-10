@@ -22,11 +22,72 @@
         {{ showTauriWarning ? '❌ 浏览器环境' : '✅ Tauri 应用环境' }}
       </div>
     </div>
-    
+
+    <!-- 设置面板 -->
+    <div class="settings-panel" v-if="showSettings">
+      <div class="settings-overlay" @click="showSettings = false"></div>
+      <div class="settings-content">
+        <h3>🔧 Ollama 服务设置</h3>
+        
+        <div class="setting-group">
+          <label>Ollama 服务器地址:</label>
+          <input 
+            v-model="ollamaUrl" 
+            type="url" 
+            placeholder="http://your-server:11434"
+            class="setting-input"
+          />
+          <small>示例: http://192.168.1.100:11434 或 https://your-domain.com</small>
+        </div>
+
+        <div class="setting-group">
+          <label>AI 模型:</label>
+          <div class="model-selection">
+            <select v-model="selectedModel" class="setting-select" :disabled="!availableModels.length">
+              <option value="">{{ availableModels.length ? '请选择模型' : '请先测试连接' }}</option>
+              <option v-for="model in availableModels" :key="model" :value="model">
+                {{ model }}
+              </option>
+            </select>
+            <button @click="testConnection" class="test-btn" :disabled="!ollamaUrl || isTestingConnection">
+              {{ isTestingConnection ? '测试中...' : '测试连接' }}
+            </button>
+          </div>
+          <div v-if="connectionStatus" :class="connectionStatus.type">
+            {{ connectionStatus.message }}
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button @click="saveSettings" class="save-btn" :disabled="!ollamaUrl || !selectedModel">
+            保存设置
+          </button>
+          <button @click="showSettings = false" class="cancel-btn">
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
+
     <main>
       <!-- 翻译输入区域 -->
       <section class="translation-section">
-        <h2>文本翻译</h2>
+        <div class="section-header">
+          <h2>文本翻译</h2>
+          <div class="header-actions">
+            <div class="connection-status" :class="isConfigured ? 'configured' : 'not-configured'">
+              {{ isConfigured ? `✅ ${selectedModel}` : '⚠️ 未配置' }}
+            </div>
+            <button @click="showSettings = true" class="settings-btn">
+              ⚙️ 设置
+            </button>
+          </div>
+        </div>
+        
+        <div v-if="!isConfigured" class="config-warning">
+          <p>⚠️ 请先配置 Ollama 服务器和模型才能使用翻译功能</p>
+          <button @click="showSettings = true" class="config-btn">立即配置</button>
+        </div>
         <div class="input-group">
           <textarea 
             v-model="inputText" 
@@ -139,7 +200,15 @@ export default {
       playingText: null, // 追踪当前正在播放的文本
       isPlayingAll: false, // 追踪是否正在播放全部
       showTauriWarning: false, // 显示 Tauri 环境警告
-      debugInfo: '' // 调试信息
+      debugInfo: '', // 调试信息
+      
+      // Ollama 配置相关
+      showSettings: false,
+      ollamaUrl: localStorage.getItem('ollamaUrl') || 'http://localhost:11434',
+      selectedModel: localStorage.getItem('selectedModel') || '',
+      availableModels: [],
+      isTestingConnection: false,
+      connectionStatus: null
     }
   },
   mounted() {
@@ -171,21 +240,32 @@ export default {
     }
   },
   computed: {
+    isConfigured() {
+      return this.ollamaUrl && this.selectedModel;
+    },
     filteredLanguages() {
       if (!this.languageFilter) {
-        return this.availableLanguages
+        return this.availableLanguages;
       }
       return this.availableLanguages.filter(lang => 
         lang.toLowerCase().includes(this.languageFilter.toLowerCase())
-      )
+      );
     },
+    
     isAllSelected() {
-      return this.selectedLanguages.length === this.availableLanguages.length
+      return this.selectedLanguages.length === this.filteredLanguages.length && this.filteredLanguages.length > 0;
     }
   },
   methods: {
     async translateText() {
       if (!this.inputText || this.selectedLanguages.length === 0) return
+      
+      // 检查配置
+      if (!this.isConfigured) {
+        alert('请先配置 Ollama 服务器和模型');
+        this.showSettings = true;
+        return;
+      }
       
       // 检查 Tauri 环境
       if (!isTauriEnv()) {
@@ -195,11 +275,13 @@ export default {
       
       this.isTranslating = true
       try {
-        // 使用本地Ollama进行翻译
+        // 使用配置的Ollama进行翻译
         const result = await invoke('translate_text', {
           request: {
             text: this.inputText,
-            target_languages: this.selectedLanguages
+            target_languages: this.selectedLanguages,
+            ollama_url: this.ollamaUrl,
+            model_name: this.selectedModel
           }
         })
         
@@ -293,6 +375,57 @@ export default {
           reject(new Error(`语音播放失败 (${lang}): ${error.message}`))
         }
       })
+    },
+    
+    async testConnection() {
+      if (!this.ollamaUrl) {
+        this.connectionStatus = { type: 'error', message: '请输入服务器地址' };
+        return;
+      }
+      
+      this.isTestingConnection = true;
+      this.connectionStatus = { type: 'info', message: '正在测试连接...' };
+      
+      try {
+        const models = await invoke('test_ollama_connection', {
+          ollamaUrl: this.ollamaUrl
+        });
+        
+        this.availableModels = models;
+        this.connectionStatus = { 
+          type: 'success', 
+          message: `连接成功！找到 ${models.length} 个模型` 
+        };
+        
+        // 如果之前没有选择模型，自动选择第一个
+        if (!this.selectedModel && models.length > 0) {
+          this.selectedModel = models[0];
+        }
+      } catch (error) {
+        this.connectionStatus = { 
+          type: 'error', 
+          message: `连接失败: ${error}` 
+        };
+        this.availableModels = [];
+      } finally {
+        this.isTestingConnection = false;
+      }
+    },
+
+    saveSettings() {
+      if (!this.ollamaUrl || !this.selectedModel) {
+        alert('请填写完整的配置信息');
+        return;
+      }
+      
+      // 保存到localStorage
+      localStorage.setItem('ollamaUrl', this.ollamaUrl);
+      localStorage.setItem('selectedModel', this.selectedModel);
+      
+      this.showSettings = false;
+      this.connectionStatus = null;
+      
+      alert('设置已保存！');
     },
     
     selectAllLanguages() {
@@ -686,5 +819,363 @@ p {
   color: #e74c3c;
   font-weight: bold;
   font-size: 16px;
+}
+
+/* 设置面板样式 */
+.settings-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(5px);
+}
+
+.settings-content {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 30px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.settings-content h3 {
+  margin: 0 0 25px 0;
+  color: #2c3e50;
+  text-align: center;
+  font-size: 24px;
+}
+
+.setting-group {
+  margin-bottom: 25px;
+}
+
+.setting-group label {
+  display: block;
+  margin-bottom: 8px;
+  color: #2c3e50;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.setting-input, .setting-select {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #e1e8ed;
+  border-radius: 10px;
+  font-size: 14px;
+  background: white;
+  transition: all 0.3s ease;
+}
+
+.setting-input:focus, .setting-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.setting-group small {
+  display: block;
+  margin-top: 5px;
+  color: #7f8c8d;
+  font-size: 12px;
+}
+
+.model-selection {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.model-selection select {
+  flex: 1;
+}
+
+.test-btn {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.test-btn:hover:not(:disabled) {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+.test-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: flex-end;
+  margin-top: 30px;
+}
+
+.save-btn, .cancel-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.save-btn {
+  background: #27ae60;
+  color: white;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #219a52;
+  transform: translateY(-1px);
+}
+
+.save-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  background: #e74c3c;
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: #c0392b;
+  transform: translateY(-1px);
+}
+
+.error {
+  color: #e74c3c;
+  font-size: 14px;
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(231, 76, 60, 0.1);
+  border-radius: 6px;
+}
+
+.success {
+  color: #27ae60;
+  font-size: 14px;
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(39, 174, 96, 0.1);
+  border-radius: 6px;
+}
+
+.info {
+  color: #3498db;
+  font-size: 14px;
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(52, 152, 219, 0.1);
+  border-radius: 6px;
+}
+
+/* 翻译区域头部样式 */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.connection-status {
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.connection-status.configured {
+  background: rgba(39, 174, 96, 0.1);
+  color: #27ae60;
+  border: 1px solid rgba(39, 174, 96, 0.3);
+}
+
+.connection-status.not-configured {
+  background: rgba(230, 126, 34, 0.1);
+  color: #e67e22;
+  border: 1px solid rgba(230, 126, 34, 0.3);
+}
+
+.settings-btn {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  color: #667eea;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.settings-btn:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.config-warning {
+  background: rgba(230, 126, 34, 0.1);
+  border: 1px solid rgba(230, 126, 34, 0.3);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.config-warning p {
+  margin: 0 0 15px 0;
+  color: #e67e22;
+}
+
+.config-btn {
+  background: #e67e22;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.config-btn:hover {
+  background: #d35400;
+  transform: translateY(-1px);
+}
+
+/* 移动端适配样式 */
+@media (max-width: 768px) {
+  #app {
+    padding: 10px;
+  }
+  
+  .settings-content {
+    width: 95%;
+    padding: 20px;
+    max-height: 90vh;
+  }
+  
+  .translation-section, .results-section {
+    padding: 15px;
+    margin-bottom: 15px;
+  }
+  
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .language-checkboxes {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  
+  .checkbox-label {
+    font-size: 13px;
+    padding: 8px;
+  }
+  
+  .model-selection {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .settings-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .save-btn, .cancel-btn {
+    width: 100%;
+  }
+  
+  .translation-result {
+    padding: 12px;
+  }
+  
+  .result-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .play-controls {
+    gap: 8px;
+  }
+  
+  .play-btn, .play-all-btn, .stop-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .language-checkboxes {
+    grid-template-columns: 1fr;
+  }
+  
+  .checkbox-label {
+    padding: 10px;
+  }
+  
+  .settings-content {
+    padding: 15px;
+  }
+  
+  .connection-status {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
 }
 </style>
