@@ -1,5 +1,6 @@
 {
   "name": "alouette",
+  "description": "AI Translation & Text-to-Speech Tool - Cross-platform application built with Tauri, Vue 3, and Rust for high-quality multilingual translation and intelligent speech synthesis using Ollama AI servers.",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -22,5 +23,19 @@
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-vue": "^5",
     "vite": "^6"
-  }
+  },
+  "keywords": [
+    "translation",
+    "text-to-speech",
+    "tts",
+    "ai",
+    "ollama",
+    "multilingual",
+    "tauri",
+    "vue3",
+    "rust",
+    "cross-platform"
+  ],
+  "author": "Alouette Team",
+  "license": "MIT"
 }

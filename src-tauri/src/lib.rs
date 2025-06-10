@@ -1,19 +1,35 @@
 use reqwest;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
+mod tts;
+use tts::TTSEngine;
+
+/**
+ * Request structure for translation operations
+ * Contains the text to translate, target languages, and Ollama configuration
+ */
 #[derive(Debug, Serialize, Deserialize)]
 struct TranslationRequest {
     text: String,
     target_languages: Vec<String>,
+    ollama_url: String,
+    model_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TranslationResult {
-    language: String,
-    language_name: String,
-    translated_text: String,
+/**
+ * Response structure for translation results
+ * Contains a map of language -> translated text pairs
+ */
+#[derive(Debug, Serialize)]
+struct TranslationResponse {
+    translations: HashMap<String, String>,
 }
 
+/**
+ * Request structure for Ollama API calls
+ * Matches the Ollama API specification for generation requests
+ */
 #[derive(Debug, Serialize, Deserialize)]
 struct OllamaRequest {
     model: String,
@@ -25,197 +41,374 @@ struct OllamaRequest {
     options: Option<serde_json::Value>,
 }
 
+/**
+ * Response structure for Ollama API responses
+ * Contains the generated text response from the model
+ */
 #[derive(Debug, Serialize, Deserialize)]
 struct OllamaResponse {
     response: String,
 }
 
-// Language mapping for display purposes
-fn get_language_name(code: &str) -> String {
-    match code {
-        "en" => "English".to_string(),
-        "fr" => "French".to_string(),
-        "es" => "Spanish".to_string(),
-        "de" => "German".to_string(),
-        "ja" => "Japanese".to_string(),
-        "ru" => "Russian".to_string(),
-        "it" => "Italian".to_string(),
-        "hi" => "Hindi".to_string(),
-        "ar" => "Arabic".to_string(),
-        "ko" => "Korean".to_string(),
-        "zh" => "Chinese".to_string(),
-        "el" => "Greek".to_string(),
-        // 支持中文语言名称输入
-        "英语" | "英文" => "English".to_string(),
-        "法语" => "French".to_string(),
-        "西班牙语" => "Spanish".to_string(),
-        "德语" => "German".to_string(),
-        "日语" => "Japanese".to_string(),
-        "俄语" => "Russian".to_string(),
-        "意大利语" => "Italian".to_string(),
-        "印地语" => "Hindi".to_string(),
-        "阿拉伯语" => "Arabic".to_string(),
-        "韩语" => "Korean".to_string(),
-        "中文" => "Chinese".to_string(),
-        "希腊语" => "Greek".to_string(),
-        _ => code.to_string(),
-    }
-}
-
-fn clean_translation_response(response: &str) -> String {
-    // Remove common AI model artifacts and thinking indicators
-    let mut cleaned = response
-        .trim()
-        .replace("<think>", "")
-        .replace("</think>", "")
-        .replace("<thinking>", "")
-        .replace("</thinking>", "")
-        .replace("<|im_start|>", "")
-        .replace("<|im_end|>", "");
-
-    // Remove common explanation prefixes
-    let prefixes_to_remove = [
-        "Translation:",
-        "翻译结果:",
-        "翻译:",
-        "Result:",
-        "答案:",
-        "Answer:",
-        "The translation is:",
-        "Here is the translation:",
-        "这个翻译是:",
-        "翻译如下:",
-        "Direct translation:",
-        "Translation result:",
-    ];
-    
-    for prefix in &prefixes_to_remove {
-        if cleaned.trim().starts_with(prefix) {
-            cleaned = cleaned.trim()[prefix.len()..].trim().to_string();
-        }
-    }
-
-    // Remove lines containing thinking processes
-    let lines: Vec<&str> = cleaned.lines().collect();
-    let mut final_lines = Vec::new();
-    
-    for line in &lines {
-        let line_lower = line.to_lowercase();
-        let is_thinking_line = line_lower.contains("let me think") ||
-                              line_lower.contains("first,") ||
-                              line_lower.contains("however,") ||
-                              line_lower.contains("actually,") ||
-                              line_lower.contains("i need to") ||
-                              line_lower.contains("思考") ||
-                              line_lower.contains("首先") ||
-                              line_lower.contains("然而") ||
-                              line_lower.contains("实际上") ||
-                              line_lower.contains("我需要") ||
-                              (line_lower.contains("translate") && line_lower.contains("to")) ||
-                              line_lower.contains("explanation") ||
-                              line_lower.contains("reasoning");
-        
-        if !is_thinking_line && !line.trim().is_empty() {
-            final_lines.push(line.trim());
-        }
-    }
-
-    // If we have multiple lines, take the last meaningful one
-    if final_lines.len() > 1 {
-        for line in final_lines.iter().rev() {
-            if line.len() > 2 && !line.ends_with(':') {
-                return line.to_string();
-            }
-        }
-    }
-
-    // If we still have content, return the cleaned version
-    if !final_lines.is_empty() {
-        return final_lines.join(" ").trim().to_string();
-    }
-
-    // Fallback to cleaned response
-    cleaned.trim().to_string()
-}
-
+/**
+ * Main translation command exposed to the frontend
+ * Translates text to multiple target languages using configured Ollama server
+ * 
+ * @param request - Translation request containing text, languages, and server config
+ * @returns Translation response with results for each language
+ */
 #[tauri::command]
-async fn translate_text(request: TranslationRequest) -> Result<Vec<TranslationResult>, String> {
-    let mut results = Vec::new();
-
-    for lang_code in request.target_languages {
-        let lang_name = get_language_name(&lang_code);
-
-        // Create prompt for Ollama
-        let prompt = format!(
-            "Translate \"{}\" to {}. Return only the direct translation without any explanation or reasoning: ",
-            request.text,
-            lang_name
-        );
-
-        // Make request to local Ollama
-        let ollama_request = OllamaRequest {
-            model: "qwen3:1.7b".to_string(), // 使用可用的qwen3:1.7b模型
-            prompt,
-            stream: false,
-            system: Some("You are a translation assistant. Provide only direct translations without explanations, reasoning, or additional commentary.".to_string()),
-            options: Some(serde_json::json!({
-                "temperature": 0.1,
-                "top_p": 0.9,
-                "top_k": 10,
-                "repeat_penalty": 1.1,
-                "num_predict": 50
-            })),
-        };
-
-        match call_ollama(ollama_request).await {
-            Ok(response) => {
-                let cleaned_response = clean_translation_response(&response);
-                results.push(TranslationResult {
-                    language: lang_code,
-                    language_name: lang_name,
-                    translated_text: cleaned_response,
-                });
+async fn translate_text(request: TranslationRequest) -> Result<TranslationResponse, String> {
+    println!("Starting translation process for text: '{}'", request.text);
+    println!("Target languages: {:?}", request.target_languages);
+    println!("Using Ollama server: {}", request.ollama_url);
+    println!("Using model: {}", request.model_name);
+    
+    let mut translations = HashMap::new();
+    
+    // Process each target language sequentially
+    for lang in &request.target_languages {
+        println!("Translating to {}", lang);
+        
+        match call_ollama_translate(&request.text, lang, &request.ollama_url, &request.model_name).await {
+            Ok(translation) => {
+                println!("Successfully translated to {}: '{}'", lang, translation);
+                translations.insert(lang.clone(), translation);
             }
             Err(e) => {
-                // If translation fails, still add an entry with error message
-                results.push(TranslationResult {
-                    language: lang_code,
-                    language_name: lang_name,
-                    translated_text: format!("Translation failed: {}", e),
-                });
+                println!("Failed to translate to {}: {}", lang, e);
+                return Err(format!("Translation failed for {}: {}", lang, e));
             }
         }
     }
-
-    Ok(results)
+    
+    println!("Translation process completed successfully");
+    Ok(TranslationResponse { translations })
 }
 
-async fn call_ollama(request: OllamaRequest) -> Result<String, String> {
-    let client = reqwest::Client::new();
+/**
+ * Internal function to call Ollama API for translation
+ * Handles the actual HTTP communication with the Ollama server
+ * 
+ * @param text - Text to translate
+ * @param target_lang - Target language for translation
+ * @param ollama_url - Ollama server URL
+ * @param model_name - AI model to use for translation
+ * @returns Translated text or error message
+ */
+async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &str, model_name: &str) -> Result<String, String> {
+    println!("Preparing Ollama API call for translation to {}", target_lang);
+    
+    // Create HTTP client with timeout
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    
+    // Map Chinese language names to English for better translation results
+    let english_lang = match target_lang {
+        "English" => "English",
+        "Japanese" => "Japanese", 
+        "Korean" => "Korean",
+        "French" => "French",
+        "German" => "German",
+        "Spanish" => "Spanish",
+        "Russian" => "Russian",
+        "Italian" => "Italian",
+        "Hindi" => "Hindi",
+        "Greek" => "Greek",
+        "Arabic" => "Arabic",
+        _ => target_lang,
+    };
 
+    let prompt = format!("Translate '{}' to {}:", text, english_lang);
+    println!("Generated prompt: {}", prompt);
+    
+    // Prepare request body with optimized parameters for translation
+    let request_body = serde_json::json!({
+        "model": model_name,
+        "prompt": prompt,
+        "stream": false,
+        "options": {
+            "temperature": 0.0,    // Deterministic output for consistent translations
+            "num_predict": 15      // Limit output length for concise translations
+        }
+    });
+
+    let api_url = format!("{}/api/generate", ollama_url.trim_end_matches('/'));
+    println!("Sending request to: {}", api_url);
+    
+    // Send request to Ollama API
     let response = client
-        .post("http://localhost:11434/api/generate")
-        .json(&request)
+        .post(&api_url)
+        .json(&request_body)
         .send()
         .await
-        .map_err(|e| format!("Failed to connect to Ollama: {}", e))?;
+        .map_err(|e| format!("Failed to connect to Ollama server: {}", e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Ollama API returned status: {}", response.status()));
+        let error_msg = format!("Ollama API returned error status: {}", response.status());
+        println!("{}", error_msg);
+        return Err(error_msg);
     }
 
-    let ollama_response: OllamaResponse = response
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
-
-    Ok(ollama_response.response)
+    // Parse response
+    let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+    let response_json: serde_json::Value = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
+    
+    let translation = response_json["response"]
+        .as_str()
+        .unwrap_or("")
+        .trim();
+    
+    let cleaned_translation = clean_ollama_response(translation);
+    println!("Cleaned translation result: '{}'", cleaned_translation);
+    Ok(cleaned_translation)
 }
 
+/**
+ * Clean up Ollama response by removing common artifacts
+ * Removes model-specific tokens and formatting issues
+ * 
+ * @param response - Raw response from Ollama
+ * @returns Cleaned translation text
+ */
+fn clean_ollama_response(response: &str) -> String {
+    response.trim()
+        .replace("<|im_start|>", "")
+        .replace("<|im_end|>", "")
+        .replace("\"", "")
+        .trim()
+        .to_string()
+}
+
+// ================================
+// Text-to-Speech Commands
+// ================================
+
+/**
+ * Play text-to-speech for given text and language
+ * Main TTS command exposed to the frontend
+ * 
+ * @param text - Text to synthesize
+ * @param lang - Language for voice selection
+ * @returns Success or error message
+ */
+#[tauri::command]
+async fn play_tts(text: String, lang: String) -> Result<(), String> {
+    println!("TTS request - Text: '{}', Language: '{}'", text, lang);
+    
+    let tts_engine = TTSEngine::new();
+    match tts_engine.play_tts(&text, &lang).await {
+        Ok(()) => {
+            println!("TTS playback completed successfully");
+            Ok(())
+        }
+        Err(e) => {
+            println!("TTS playback failed: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/**
+ * Play TTS with advanced settings (currently simplified)
+ * Extended TTS command with rate, volume, and voice selection options
+ * 
+ * @param text - Text to synthesize
+ * @param lang - Language for voice selection
+ * @param _rate - Speech rate (currently unused in simplified implementation)
+ * @param _volume - Audio volume (currently unused in simplified implementation)
+ * @param _auto_select_voice - Auto voice selection flag (currently unused)
+ * @returns Success or error message
+ */
+#[tauri::command]
+async fn play_tts_with_settings(
+    text: String, 
+    lang: String, 
+    _rate: f32, 
+    _volume: f32, 
+    _auto_select_voice: bool
+) -> Result<(), String> {
+    println!("TTS with settings request - Text: '{}', Language: '{}'", text, lang);
+    
+    let tts_engine = TTSEngine::new();
+    // Simplified version primarily uses language parameter for voice selection
+    tts_engine.play_tts(&text, &lang).await
+}
+
+/**
+ * Get available voices organized by language
+ * Returns voice information for TTS engine selection
+ * 
+ * @returns Map of language -> voice list
+ */
+#[tauri::command]
+async fn get_edge_tts_voices() -> Result<HashMap<String, Vec<String>>, String> {
+    println!("Fetching available TTS voices");
+    let tts_engine = TTSEngine::new();
+    let voices = tts_engine.get_voices_by_language();
+    println!("Found {} language groups with voices", voices.len());
+    Ok(voices)
+}
+
+// ================================
+// TTS Cache Management Commands
+// ================================
+
+/**
+ * Clear all TTS cache files
+ * Removes cached audio files to free up disk space
+ * 
+ * @returns Total size of cleared files in bytes
+ */
+#[tauri::command]
+async fn clear_tts_cache() -> Result<u64, String> {
+    println!("Starting TTS cache cleanup");
+    let tts_engine = TTSEngine::new();
+    match tts_engine.clear_cache().await {
+        Ok(size) => {
+            println!("TTS cache cleared successfully, freed {} bytes", size);
+            Ok(size)
+        }
+        Err(e) => {
+            println!("Failed to clear TTS cache: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/**
+ * Get TTS cache information
+ * Returns statistics about cached files and disk usage
+ * 
+ * @returns JSON object with file count and total size information
+ */
+#[tauri::command]
+async fn get_tts_cache_info() -> Result<serde_json::Value, String> {
+    println!("Retrieving TTS cache information");
+    let tts_engine = TTSEngine::new();
+    
+    match tts_engine.get_cache_info().await {
+        Ok((file_count, total_size)) => {
+            let cache_info = serde_json::json!({
+                "file_count": file_count,
+                "total_size": total_size,
+                "total_size_mb": (total_size as f64) / (1024.0 * 1024.0)
+            });
+            println!("Cache info: {} files, {} bytes", file_count, total_size);
+            Ok(cache_info)
+        }
+        Err(e) => {
+            println!("Failed to get cache info: {}", e);
+            Err(e)
+        }
+    }
+}
+
+/**
+ * Get available TTS voices in structured format
+ * Returns detailed voice information for frontend display
+ * 
+ * @returns Array of voice objects with metadata
+ */
+#[tauri::command]
+fn get_available_tts_voices() -> Result<Vec<serde_json::Value>, String> {
+    println!("Retrieving available TTS voices");
+    let tts_engine = TTSEngine::new();
+    let voices = tts_engine.get_available_voices();
+    
+    let voice_list: Vec<serde_json::Value> = voices.iter().map(|voice| {
+        serde_json::json!({
+            "id": voice.name,
+            "name": voice.display_name,
+            "language": voice.language,
+            "gender": voice.gender,
+            "locale": voice.locale
+        })
+    }).collect();
+    
+    println!("Found {} available voices", voice_list.len());
+    Ok(voice_list)
+}
+
+// ================================
+// Ollama Connection Commands
+// ================================
+
+/**
+ * Test connection to Ollama server and fetch available models
+ * Verifies server connectivity and retrieves model list
+ * 
+ * @param ollama_url - Ollama server URL to test
+ * @returns List of available model names
+ */
+#[tauri::command]
+async fn connect_ollama(ollama_url: String) -> Result<Vec<String>, String> {
+    println!("Testing connection to Ollama server: {}", ollama_url);
+    
+    let client = reqwest::Client::new();
+    let api_url = format!("{}/api/tags", ollama_url.trim_end_matches('/'));
+    
+    println!("Sending request to: {}", api_url);
+    
+    let response = client
+        .get(&api_url)
+        .send()
+        .await
+        .map_err(|e| {
+            let error_msg = format!("Connection failed: {}", e);
+            println!("{}", error_msg);
+            error_msg
+        })?;
+    
+    let response_text = response
+        .text()
+        .await
+        .map_err(|e| {
+            let error_msg = format!("Failed to read response: {}", e);
+            println!("{}", error_msg);
+            error_msg
+        })?;
+    
+    let response_json: serde_json::Value = serde_json::from_str(&response_text)
+        .map_err(|e| {
+            let error_msg = format!("Failed to parse response: {}", e);
+            println!("{}", error_msg);
+            error_msg
+        })?;
+    
+    let models: Vec<String> = response_json["models"]
+        .as_array()
+        .unwrap_or(&vec![])
+        .iter()
+        .filter_map(|model| model["name"].as_str())
+        .map(|name| name.to_string())
+        .collect();
+    
+    println!("Successfully retrieved {} models from Ollama server", models.len());
+    Ok(models)
+}
+
+// ================================
+// File Management Commands
+// ================================
+
+/**
+ * Save translation results to file
+ * Utility command for exporting translation data
+ * 
+ * @param content - Translation content to save
+ * @param filename - Desired filename for the export
+ * @returns Full path of the saved file
+ */
 #[tauri::command]
 async fn save_translation_file(content: String, filename: String) -> Result<String, String> {
     use std::fs;
     use std::path::Path;
+
+    println!("Saving translation file: {}", filename);
 
     // Create translations directory if it doesn't exist
     let translations_dir = Path::new("translations");
@@ -229,19 +422,60 @@ async fn save_translation_file(content: String, filename: String) -> Result<Stri
     fs::write(&file_path, content)
         .map_err(|e| format!("Failed to write file: {}", e))?;
 
-    Ok(file_path.to_string_lossy().to_string())
+    let saved_path = file_path.to_string_lossy().to_string();
+    println!("Translation file saved successfully: {}", saved_path);
+    Ok(saved_path)
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+// ================================
+// Development/Testing Commands
+// ================================
+
+/**
+ * Simple greeting command for testing Tauri communication
+ * Development utility for verifying frontend-backend connectivity
+ * 
+ * @param name - Name to include in greeting
+ * @returns Greeting message
+ */
 #[tauri::command]
 fn greet(name: &str) -> String {
+    println!("Greeting request for: {}", name);
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+// ================================
+// Application Entry Point
+// ================================
+
+/**
+ * Main application entry point
+ * Configures Tauri with all available commands and starts the application
+ */
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    println!("Starting Alouette application...");
+    
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet, translate_text, save_translation_file])
+        .invoke_handler(tauri::generate_handler![
+            // Core functionality
+            greet, 
+            translate_text, 
+            save_translation_file,
+            
+            // TTS functionality
+            play_tts,
+            play_tts_with_settings,
+            get_available_tts_voices,
+            get_edge_tts_voices,
+            
+            // Cache management
+            clear_tts_cache,
+            get_tts_cache_info,
+            
+            // Ollama integration
+            connect_ollama
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

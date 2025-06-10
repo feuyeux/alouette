@@ -3,15 +3,15 @@
   "version": "0.1.0",
   "identifier": "com.alouette.app",
   "build": {
-    "beforeDevCommand": "vite --port 1420 --strictPort",
+    "beforeDevCommand": "vite --port 1421 --strictPort",
     "beforeBuildCommand": "npm run vite:build",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:1421",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "Alouette - 翻译与朗读",
+        "title": "Alouette - AI Translation & Text-to-Speech",
         "width": 1000,
         "height": 700,
         "resizable": true,

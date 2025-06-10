@@ -1,1181 +1,292 @@
 <template>
   <div id="app">
-    <!-- Tauri 环境警告 -->
-    <div v-if="showTauriWarning" class="tauri-warning">
-      <h3>⚠️ 环境错误</h3>
-      <p>请通过 Tauri 应用运行此程序，而不是直接在浏览器中打开。</p>
-      <p>正确的启动方式：</p>
-      <code>npm run dev</code>
-      <p>然后使用弹出的应用窗口，而不是浏览器标签页。</p>
-      <div class="debug-info">
-        <details>
-          <summary>调试信息 (点击展开)</summary>
-          <pre>{{ debugInfo }}</pre>
-        </details>
-      </div>
-    </div>
-    
-    <!-- 调试面板 -->
-    <div class="debug-panel">
-      <h4>环境状态:</h4>
-      <div :class="{ 'status-good': !showTauriWarning, 'status-bad': showTauriWarning }">
-        {{ showTauriWarning ? '❌ 浏览器环境' : '✅ Tauri 应用环境' }}
-      </div>
-    </div>
-
-    <!-- 设置面板 -->
+    <!-- Settings Panel -->
     <div class="settings-panel" v-if="showSettings">
       <div class="settings-overlay" @click="showSettings = false"></div>
       <div class="settings-content">
-        <h3>🔧 Ollama 服务设置</h3>
+        <h3>🔧 Application Settings</h3>
         
-        <div class="setting-group">
-          <label>Ollama 服务器地址:</label>
-          <input 
-            v-model="ollamaUrl" 
-            type="url" 
-            placeholder="http://your-server:11434"
-            class="setting-input"
-          />
-          <small>示例: http://192.168.1.100:11434 或 https://your-domain.com</small>
+        <!-- Ollama Settings -->
+        <div class="settings-section">
+          <h4>🤖 Ollama Service Configuration</h4>
+          
+          <div class="setting-group">
+            <label>Ollama Server Address:</label>
+            <input 
+              v-model="ollamaUrl" 
+              type="url" 
+              placeholder="http://your-server:11434"
+              class="setting-input"
+            />
+            <small>Example: http://192.168.1.100:11434 or https://your-domain.com</small>
+          </div>
+
+          <div class="setting-group">
+            <label>AI Model:</label>
+            <div class="model-selection">
+              <select v-model="selectedModel" class="setting-select" :disabled="!availableModels.length">
+                <option value="">{{ availableModels.length ? 'Please select a model' : 'Test connection first' }}</option>
+                <option v-for="model in availableModels" :key="model" :value="model">
+                  {{ model }}
+                </option>
+              </select>
+              <button @click="testConnection" class="btn-secondary btn-medium" :disabled="!ollamaUrl || isTestingConnection">
+                {{ isTestingConnection ? 'Testing...' : 'Test Connection' }}
+              </button>
+            </div>
+            <div v-if="connectionStatus" :class="connectionStatus.type">
+              {{ connectionStatus.message }}
+            </div>
+          </div>
         </div>
 
-        <div class="setting-group">
-          <label>AI 模型:</label>
-          <div class="model-selection">
-            <select v-model="selectedModel" class="setting-select" :disabled="!availableModels.length">
-              <option value="">{{ availableModels.length ? '请选择模型' : '请先测试连接' }}</option>
-              <option v-for="model in availableModels" :key="model" :value="model">
-                {{ model }}
-              </option>
-            </select>
-            <button @click="testConnection" class="test-btn" :disabled="!ollamaUrl || isTestingConnection">
-              {{ isTestingConnection ? '测试中...' : '测试连接' }}
+        <!-- TTS Settings -->
+        <div class="settings-section">
+          <h4>🔊 Text-to-Speech Settings</h4>
+          
+          <div class="setting-group">
+            <label>Speech Rate:</label>
+            <div class="range-setting">
+              <input 
+                v-model="ttsSettings.rate" 
+                type="range" 
+                min="0.1" 
+                max="2" 
+                step="0.1"
+                class="range-input"
+              />
+              <span class="range-value">{{ ttsSettings.rate }}x</span>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <label>Volume:</label>
+            <div class="range-setting">
+              <input 
+                v-model="ttsSettings.volume" 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.1"
+                class="range-input"
+              />
+              <span class="range-value">{{ Math.round(ttsSettings.volume * 100) }}%</span>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <label>Pause Between Languages:</label>
+            <div class="range-setting">
+              <input 
+                v-model="ttsSettings.pauseBetweenLanguages" 
+                type="range" 
+                min="0" 
+                max="2000" 
+                step="100"
+                class="range-input"
+              />
+              <span class="range-value">{{ ttsSettings.pauseBetweenLanguages }}ms</span>
+            </div>
+          </div>
+          
+          <div class="setting-group">
+            <label class="checkbox-label">
+              <input 
+                v-model="ttsSettings.autoSelectVoice" 
+                type="checkbox"
+                class="checkbox-input"
+              />
+              Auto-select matching voice
+            </label>
+            <small>Attempt to automatically select appropriate voice for each language</small>
+          </div>
+          
+          <div class="setting-group">
+            <button @click="testTTS" class="btn-secondary btn-medium" :disabled="isTesting">
+              {{ isTesting ? 'Testing...' : 'Test Speech' }}
             </button>
           </div>
-          <div v-if="connectionStatus" :class="connectionStatus.type">
-            {{ connectionStatus.message }}
+        </div>
+
+        <!-- TTS Cache Management -->
+        <div class="settings-section">
+          <h4>💾 Voice Cache Management</h4>
+          
+          <div class="setting-group">
+            <div class="cache-info" v-if="cacheInfo">
+              <p>📊 Cache Statistics:</p>
+              <ul>
+                <li>Cache files: {{ cacheInfo.file_count }}</li>
+                <li>Disk usage: {{ cacheInfo.total_size_mb.toFixed(2) }} MB</li>
+              </ul>
+            </div>
+            <div class="cache-buttons btn-group-tight">
+              <button @click="refreshCacheInfo" class="btn-info btn-small" :disabled="isRefreshingCache">
+                {{ isRefreshingCache ? 'Refreshing...' : '🔄 Refresh Info' }}
+              </button>
+              <button @click="clearCache" class="btn-danger btn-small" :disabled="isClearingCache">
+                {{ isClearingCache ? 'Clearing...' : '🗑️ Clear Cache' }}
+              </button>
+            </div>
+            <small>Cache accelerates speech synthesis for repeated texts but uses disk space</small>
           </div>
         </div>
 
-        <div class="settings-actions">
-          <button @click="saveSettings" class="save-btn" :disabled="!ollamaUrl || !selectedModel">
-            保存设置
+        <div class="settings-footer btn-group">
+          <button @click="saveSettings" class="btn-primary btn-medium">Save Settings</button>
+          <button @click="showSettings = false" class="btn-danger btn-medium">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Interface -->
+    <header>
+      <img src="./assets/alouette_circle_small.png" alt="Alouette Logo" class="header-logo">
+      <h1>Alouette</h1>
+      <button @click="showSettings = true" class="btn-light btn-small">⚙️ Settings</button>
+    </header>
+
+    <!-- LLM Service Status -->
+    <div class="llm-status-bar">
+      <div class="llm-info">
+        <div class="status-section">
+          <span class="status-label">🤖 LLM Service:</span>
+          <span :class="['status-value', { 'status-connected': isConfigured, 'status-disconnected': !isConfigured }]">
+            {{ isConfigured ? 'Connected' : 'Not Configured' }}
+          </span>
+        </div>
+        <div class="status-section" v-if="ollamaUrl">
+          <span class="status-label">🌐 Server:</span>
+          <span class="status-value">{{ formatServerUrl(ollamaUrl) }}</span>
+        </div>
+        <div class="status-section" v-if="selectedModel">
+          <span class="status-label">🧠 Model:</span>
+          <span class="status-value">{{ selectedModel }}</span>
+        </div>
+        <div class="status-section" v-if="availableModels.length > 0">
+          <span class="status-label">📊 Available Models:</span>
+          <span class="status-value">{{ availableModels.length }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Warning Notice -->
+    <div v-if="showTauriWarning" class="warning-card">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-text">
+          <strong>Notice:</strong> Currently running in web mode, speech features may be limited.
+          <br>Recommended to download the desktop version for full functionality.
+        </div>
+        <button @click="showTauriWarning = false" class="btn-danger btn-mini btn-icon-only">×</button>
+      </div>
+    </div>
+
+    <!-- Translation Input Section -->
+    <div class="translation-section">
+      <h3>🌐 Enter Text to Translate</h3>
+      <div class="input-group">
+        <textarea 
+          v-model="inputText" 
+          placeholder="Enter text to translate..."
+          rows="3"
+        ></textarea>
+      </div>
+
+      <!-- Language Selection -->
+      <div class="language-container">
+        <h4>📋 Select Target Languages</h4>
+        
+        <!-- Language List -->
+        <div class="language-grid">
+          <label 
+            v-for="language in availableLanguages" 
+            :key="language"
+            class="checkbox-label"
+            :class="{ 'select-all-option': language === 'Select All' }"
+          >
+            <input 
+              type="checkbox" 
+              :value="language" 
+              v-model="selectedLanguages"
+              :checked="language === 'Select All' ? isAllSelected : selectedLanguages.includes(language)"
+              @change="language === 'Select All' ? toggleSelectAll($event) : null"
+            />
+            <span v-if="language === 'Select All'">
+              Select All ({{ selectedLanguages.filter(lang => lang !== 'Select All').length }}/{{ availableLanguages.filter(lang => lang !== 'Select All').length }})
+            </span>
+            <span v-else>{{ language }}</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="translate-button-container">
+        <button 
+          @click="translateText" 
+          :disabled="!inputText.trim() || selectedLanguages.length === 0 || isTranslating"
+          class="btn-primary btn-large"
+        >
+          {{ isTranslating ? '🔄 Translating...' : '🚀 Start Translation' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Translation Results Section -->
+    <div v-if="currentTranslation" class="results-section">
+      <div class="results-header">
+        <h3>📚 Translation Results</h3>
+        <div class="control-buttons btn-group-tight">
+          <button 
+            @click="playAll" 
+            :disabled="isPlayingAll || playingText"
+            class="btn-primary btn-medium"
+          >
+            {{ isPlayingAll ? '⏸️ Pause Playback' : '🎵 Play All' }}
           </button>
-          <button @click="showSettings = false" class="cancel-btn">
-            取消
+          <button 
+            @click="stopPlayAll" 
+            :disabled="!playingText && !isPlayingAll"
+            class="btn-danger btn-medium"
+          >
+            🛑 Stop
+          </button>
+        </div>
+      </div>
+
+      <!-- Original Text Display -->
+      <div class="original-text">
+        <span class="original-label">Original:</span>
+        <span class="original-content">{{ currentTranslation.original }}</span>
+      </div>
+
+      <!-- Translation Results List -->
+      <div class="translations">
+        <div 
+          v-for="(translation, language) in currentTranslation.translations" 
+          :key="language"
+          class="translation-row"
+        >
+          <div class="language-name">{{ language }}</div>
+          <div class="translation-text">{{ translation }}</div>
+          <button 
+            @click="playTTS(translation, language)"
+            :disabled="playingText === translation"
+            :class="['btn-primary', 'btn-small', { 'btn-playing': playingText === translation }]"
+          >
+            {{ playingText === translation ? '🔊' : '▶️' }}
           </button>
         </div>
       </div>
     </div>
 
-    <main>
-      <!-- 翻译输入区域 -->
-      <section class="translation-section">
-        <div class="section-header">
-          <h2>文本翻译</h2>
-          <div class="header-actions">
-            <div class="connection-status" :class="isConfigured ? 'configured' : 'not-configured'">
-              {{ isConfigured ? `✅ ${selectedModel}` : '⚠️ 未配置' }}
-            </div>
-            <button @click="showSettings = true" class="settings-btn">
-              ⚙️ 设置
-            </button>
-          </div>
-        </div>
-        
-        <div v-if="!isConfigured" class="config-warning">
-          <p>⚠️ 请先配置 Ollama 服务器和模型才能使用翻译功能</p>
-          <button @click="showSettings = true" class="config-btn">立即配置</button>
-        </div>
-        <div class="input-group">
-          <textarea 
-            v-model="inputText" 
-            placeholder="请输入要翻译的文本..."
-            rows="4"
-          ></textarea>
-        </div>
-        
-        <div class="language-selection">
-          <h3>选择翻译语言：</h3>
-          <div class="language-controls">
-            <button @click="selectAllLanguages" class="select-all-btn" type="button">
-              {{ isAllSelected ? '取消全选' : '全选' }}
-            </button>
-            <span class="selected-count">已选择: {{ selectedLanguages.length }}/{{ availableLanguages.length }}</span>
-          </div>
-          <div class="language-checkboxes">
-            <label v-for="lang in filteredLanguages" :key="lang" class="checkbox-label">
-              <input 
-                type="checkbox" 
-                :value="lang" 
-                v-model="selectedLanguages"
-              />
-              {{ lang }}
-            </label>
-          </div>
-        </div>
-        
-        <button 
-          @click="translateText" 
-          :disabled="!inputText || selectedLanguages.length === 0 || isTranslating"
-          class="translate-btn"
-        >
-          {{ isTranslating ? '翻译中...' : '开始翻译' }}
-        </button>
-      </section>
-      
-      <!-- 翻译结果区域 -->
-      <section v-if="currentTranslation" class="results-section">
-        <h2>翻译结果</h2>
-        <div class="original-text">
-          <h3>原文：</h3>
-          <p>{{ currentTranslation.original }}</p>
-          <div class="play-controls">
-            <button @click="playTTS(currentTranslation.original, '中文')" 
-                    :class="{ playing: playingText === currentTranslation.original }"
-                    class="play-btn-small">
-              {{ playingText === currentTranslation.original ? '🔊 播放中...' : '🔊 播放原文' }}
-            </button>
-            <button @click="playAll" 
-                    :disabled="isPlayingAll"
-                    class="play-all-btn">
-              {{ isPlayingAll ? '🔊 播放全部中...' : '🔊 播放全部' }}
-            </button>
-            <button @click="stopPlayAll" 
-                    v-if="isPlayingAll"
-                    class="stop-btn">
-              ⏹️ 停止
-            </button>
-          </div>
-        </div>
-        
-        <div class="translations">
-          <div v-for="(translation, lang) in currentTranslation.translations" :key="lang" class="translation-item">
-            <div class="translation-header">
-              <h4>{{ lang }}：</h4>
-              <button @click="playTTS(translation, lang)" 
-                      :class="{ playing: playingText === translation }"
-                      class="play-btn-small">
-                {{ playingText === translation ? '🔊 播放中...' : '🔊 播放' }}
-              </button>
-            </div>
-            <p>{{ translation }}</p>
-          </div>
-        </div>
-      </section>
-    </main>
   </div>
 </template>
 
 <script>
-import { invoke } from '@tauri-apps/api/core'
-
-// 检查是否在 Tauri 环境中运行
-const isTauriEnv = () => {
-  if (typeof window === 'undefined') return false
-  
-  // 检查多个可能的 Tauri 全局变量
-  return !!(
-    window.__TAURI__ || 
-    window.__TAURI_INTERNALS__ || 
-    window.__TAURI_METADATA__ ||
-    (window.navigator && window.navigator.userAgent && window.navigator.userAgent.includes('Tauri'))
-  )
-}
-
-export default {
-  name: 'App',
-  data() {
-    return {
-      inputText: '',
-      selectedLanguages: [],
-      languageFilter: '', // 语言搜索过滤器
-      availableLanguages: [
-        '英语', '日语', '韩语', '法语', '德语', '西班牙语', '俄语', '意大利语',
-        '印地语', '希腊语', '阿拉伯语'
-      ],
-      isTranslating: false,
-      currentTranslation: null,
-      playingText: null, // 追踪当前正在播放的文本
-      isPlayingAll: false, // 追踪是否正在播放全部
-      showTauriWarning: false, // 显示 Tauri 环境警告
-      debugInfo: '', // 调试信息
-      
-      // Ollama 配置相关
-      showSettings: false,
-      ollamaUrl: localStorage.getItem('ollamaUrl') || 'http://localhost:11434',
-      selectedModel: localStorage.getItem('selectedModel') || '',
-      availableModels: [],
-      isTestingConnection: false,
-      connectionStatus: null
-    }
-  },
-  mounted() {
-    // 收集调试信息
-    this.debugInfo = JSON.stringify({
-      hasWindow: typeof window !== 'undefined',
-      hasTauri: !!window.__TAURI__,
-      hasTauriInternals: !!window.__TAURI_INTERNALS__,
-      hasTauriMetadata: !!window.__TAURI_METADATA__,
-      userAgent: navigator.userAgent,
-      location: window.location.href,
-      isTauriEnv: isTauriEnv()
-    }, null, 2)
-    
-    // 调试信息
-    console.log('Window object keys:', Object.keys(window))
-    console.log('__TAURI__:', window.__TAURI__)
-    console.log('__TAURI_INTERNALS__:', window.__TAURI_INTERNALS__)
-    console.log('__TAURI_METADATA__:', window.__TAURI_METADATA__)
-    console.log('User Agent:', navigator.userAgent)
-    console.log('Is Tauri Env:', isTauriEnv())
-    
-    // 检查 Tauri 环境
-    if (!isTauriEnv()) {
-      this.showTauriWarning = true
-      console.warn('Not running in Tauri environment!')
-    } else {
-      console.log('✅ Running in Tauri environment')
-    }
-  },
-  computed: {
-    isConfigured() {
-      return this.ollamaUrl && this.selectedModel;
-    },
-    filteredLanguages() {
-      if (!this.languageFilter) {
-        return this.availableLanguages;
-      }
-      return this.availableLanguages.filter(lang => 
-        lang.toLowerCase().includes(this.languageFilter.toLowerCase())
-      );
-    },
-    
-    isAllSelected() {
-      return this.selectedLanguages.length === this.filteredLanguages.length && this.filteredLanguages.length > 0;
-    }
-  },
-  methods: {
-    async translateText() {
-      if (!this.inputText || this.selectedLanguages.length === 0) return
-      
-      // 检查配置
-      if (!this.isConfigured) {
-        alert('请先配置 Ollama 服务器和模型');
-        this.showSettings = true;
-        return;
-      }
-      
-      // 检查 Tauri 环境
-      if (!isTauriEnv()) {
-        alert('请通过 Tauri 应用运行此程序，而不是直接在浏览器中打开。\n请运行: npm run dev')
-        return
-      }
-      
-      this.isTranslating = true
-      try {
-        // 使用配置的Ollama进行翻译
-        const result = await invoke('translate_text', {
-          request: {
-            text: this.inputText,
-            target_languages: this.selectedLanguages,
-            ollama_url: this.ollamaUrl,
-            model_name: this.selectedModel
-          }
-        })
-        
-        this.currentTranslation = {
-          original: this.inputText,
-          translations: result.translations,
-          timestamp: new Date().toISOString()
-        }
-        
-        // 清空输入
-        this.inputText = ''
-        this.selectedLanguages = []
-      } catch (error) {
-        console.error('翻译错误:', error)
-        alert('翻译失败: ' + error.message)
-      } finally {
-        this.isTranslating = false
-      }
-    },
-    
-    async playTTS(text, lang) {
-      // 检查 Tauri 环境
-      if (!isTauriEnv()) {
-        alert('请通过 Tauri 应用运行此程序，而不是直接在浏览器中打开。\n请运行: npm run dev')
-        return
-      }
-      
-      try {
-        // 设置播放状态
-        this.playingText = text
-        console.log(`准备播放TTS - 文本: "${text}", 语言: ${lang}`)
-        
-        // 使用系统TTS
-        await invoke('play_tts', { text, lang })
-        
-        this.playingText = null
-      } catch (error) {
-        console.error('播放错误:', error)
-        this.playingText = null
-        alert('播放失败: ' + error.message)
-      }
-    },
-
-    async playAll() {
-      if (!this.currentTranslation || this.isPlayingAll) return
-      
-      this.isPlayingAll = true
-      
-      try {
-        // 首先播放原文
-        if (this.isPlayingAll) {
-          await this.playTTSPromise(this.currentTranslation.original, '中文')
-        }
-        
-        // 然后依次播放所有翻译
-        for (const [lang, translation] of Object.entries(this.currentTranslation.translations)) {
-          if (!this.isPlayingAll) break // 如果用户中断了播放
-          
-          // 在每个语音之间添加短暂停顿
-          await new Promise(resolve => setTimeout(resolve, 500))
-          if (this.isPlayingAll) {
-            await this.playTTSPromise(translation, lang)
-          }
-        }
-      } catch (error) {
-        console.error('播放全部失败:', error)
-        alert('播放全部失败: ' + error.message)
-      } finally {
-        this.isPlayingAll = false
-        this.playingText = null
-      }
-    },
-
-    stopPlayAll() {
-      this.isPlayingAll = false
-      this.playingText = null
-      // Note: Tauri TTS stopping would need to be implemented in the backend
-      console.log('停止播放全部')
-    },
-
-    // Promise版本的TTS播放，用于串行播放
-    playTTSPromise(text, lang) {
-      return new Promise(async (resolve, reject) => {
-        try {
-          this.playingText = text
-          await invoke('play_tts', { text, lang })
-          this.playingText = null
-          resolve()
-        } catch (error) {
-          this.playingText = null
-          reject(new Error(`语音播放失败 (${lang}): ${error.message}`))
-        }
-      })
-    },
-    
-    async testConnection() {
-      if (!this.ollamaUrl) {
-        this.connectionStatus = { type: 'error', message: '请输入服务器地址' };
-        return;
-      }
-      
-      this.isTestingConnection = true;
-      this.connectionStatus = { type: 'info', message: '正在测试连接...' };
-      
-      try {
-        const models = await invoke('test_ollama_connection', {
-          ollamaUrl: this.ollamaUrl
-        });
-        
-        this.availableModels = models;
-        this.connectionStatus = { 
-          type: 'success', 
-          message: `连接成功！找到 ${models.length} 个模型` 
-        };
-        
-        // 如果之前没有选择模型，自动选择第一个
-        if (!this.selectedModel && models.length > 0) {
-          this.selectedModel = models[0];
-        }
-      } catch (error) {
-        this.connectionStatus = { 
-          type: 'error', 
-          message: `连接失败: ${error}` 
-        };
-        this.availableModels = [];
-      } finally {
-        this.isTestingConnection = false;
-      }
-    },
-
-    saveSettings() {
-      if (!this.ollamaUrl || !this.selectedModel) {
-        alert('请填写完整的配置信息');
-        return;
-      }
-      
-      // 保存到localStorage
-      localStorage.setItem('ollamaUrl', this.ollamaUrl);
-      localStorage.setItem('selectedModel', this.selectedModel);
-      
-      this.showSettings = false;
-      this.connectionStatus = null;
-      
-      alert('设置已保存！');
-    },
-    
-    selectAllLanguages() {
-      if (this.isAllSelected) {
-        // 如果全部已选中，则取消全选
-        this.selectedLanguages = []
-      } else {
-        // 否则选择全部语言
-        this.selectedLanguages = [...this.availableLanguages]
-      }
-    }
-  }
-}
+import AppScript from './assets/script.js'
+export default AppScript
 </script>
 
-<style scoped>
-#app {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  position: relative;
-}
-
-#app::before {
-  content: '';
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%),
-              radial-gradient(circle at 70% 80%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
-  pointer-events: none;
-  z-index: -1;
-}
-
-header {
-  text-align: center;
-  margin-bottom: 30px;
-  padding: 25px;
-  background: rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.logo-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  margin-bottom: 10px;
-}
-
-.header-logo {
-  width: 64px;
-  height: 64px;
-  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.15));
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 12px;
-  padding: 6px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.header-logo:hover {
-  transform: scale(1.08) translateY(-2px);
-  filter: drop-shadow(0 12px 36px rgba(0, 0, 0, 0.2));
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-header h1 {
-  color: #2c3e50;
-  margin: 0;
-  font-size: 2.2em;
-  font-weight: 700;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: none;
-}
-
-.subtitle {
-  color: #7f8c8d;
-  font-size: 14px;
-  margin: 8px 0 0 0;
-  font-weight: normal;
-}
-
-.translation-section, .results-section {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 25px;
-  border-radius: 20px;
-  margin-bottom: 20px;
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.input-group textarea {
-  width: 100%;
-  padding: 15px;
-  border: 2px solid #e1e8ed;
-  border-radius: 8px;
-  font-size: 16px;
-  resize: vertical;
-  font-family: inherit;
-}
-
-.input-group textarea:focus {
-  outline: none;
-  border-color: #3498db;
-}
-
-.language-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #e1e8ed;
-}
-
-.select-all-btn {
-  background: #3498db;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
-  transition: all 0.3s;
-}
-
-.select-all-btn:hover {
-  background: #2980b9;
-  transform: translateY(-1px);
-}
-
-.selected-count {
-  color: #7f8c8d;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.language-checkboxes {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 10px;
-  margin: 15px 0;
-  padding: 15px;
-  border: 1px solid #e1e8ed;
-  border-radius: 8px;
-  background: #fafbfc;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 6px;
-  transition: background-color 0.2s;
-}
-
-.checkbox-label:hover {
-  background-color: #e8f4f8;
-}
-
-.translate-btn {
-  background: #27ae60;
-  color: white;
-  border: none;
-  padding: 12px 30px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.translate-btn:hover:not(:disabled) {
-  background: #219a52;
-  transform: translateY(-2px);
-}
-
-.translate-btn:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.original-text, .translation-item {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 15px;
-  border-left: 4px solid #3498db;
-}
-
-.translation-item {
-  border-left-color: #27ae60;
-}
-
-.play-btn-small {
-  background: #e74c3c;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.3s;
-  margin-right: 8px;
-}
-
-.play-btn-small:hover {
-  background: #c0392b;
-  transform: translateY(-1px);
-}
-
-.play-btn-small.playing {
-  background: #f39c12;
-  animation: pulse 1.5s infinite;
-}
-
-.play-all-btn {
-  background: #8e44ad;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.3s;
-}
-
-.play-all-btn:hover:not(:disabled) {
-  background: #732d91;
-  transform: translateY(-1px);
-}
-
-.play-all-btn:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-  transform: none;
-  animation: pulse 1.5s infinite;
-}
-
-.stop-btn {
-  background: #e74c3c;
-  color: white;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.3s;
-}
-
-.stop-btn:hover {
-  background: #c0392b;
-  transform: translateY(-1px);
-}
-
-.play-controls {
-  display: flex;
-  align-items: center;
-  margin-top: 10px;
-  gap: 8px;
-}
-
-.translation-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.translation-header h4 {
-  margin: 0;
-}
-
-@keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.7; }
-  100% { opacity: 1; }
-}
-
-h2, h3, h4 {
-  color: #2c3e50;
-  margin-top: 0;
-}
-
-p {
-  line-height: 1.6;
-  color: #34495e;
-}
-
-.tauri-warning {
-  background: rgba(231, 76, 60, 0.9);
-  color: white;
-  padding: 20px;
-  border-radius: 12px;
-  margin-bottom: 20px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  text-align: center;
-}
-
-.tauri-warning h3 {
-  color: white;
-  margin: 0 0 15px 0;
-  font-size: 1.2em;
-}
-
-.tauri-warning p {
-  color: rgba(255, 255, 255, 0.9);
-  margin: 8px 0;
-}
-
-.tauri-warning code {
-  background: rgba(0, 0, 0, 0.3);
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
-  color: #ffd700;
-  font-weight: bold;
-}
-
-.debug-info {
-  margin-top: 15px;
-  text-align: left;
-}
-
-.debug-info details {
-  background: rgba(0, 0, 0, 0.2);
-  padding: 10px;
-  border-radius: 6px;
-}
-
-.debug-info pre {
-  font-size: 12px;
-  color: #f8f8f2;
-  margin: 5px 0;
-  overflow-x: auto;
-}
-
-.debug-panel {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 20px;
-  text-align: center;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.debug-panel h4 {
-  margin: 0 0 10px 0;
-  color: #2c3e50;
-}
-
-.status-good {
-  color: #27ae60;
-  font-weight: bold;
-  font-size: 16px;
-}
-
-.status-bad {
-  color: #e74c3c;
-  font-weight: bold;
-  font-size: 16px;
-}
-
-/* 设置面板样式 */
-.settings-panel {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.settings-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(5px);
-}
-
-.settings-content {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  padding: 30px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
-  position: relative;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.settings-content h3 {
-  margin: 0 0 25px 0;
-  color: #2c3e50;
-  text-align: center;
-  font-size: 24px;
-}
-
-.setting-group {
-  margin-bottom: 25px;
-}
-
-.setting-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #2c3e50;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.setting-input, .setting-select {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #e1e8ed;
-  border-radius: 10px;
-  font-size: 14px;
-  background: white;
-  transition: all 0.3s ease;
-}
-
-.setting-input:focus, .setting-select:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-}
-
-.setting-group small {
-  display: block;
-  margin-top: 5px;
-  color: #7f8c8d;
-  font-size: 12px;
-}
-
-.model-selection {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.model-selection select {
-  flex: 1;
-}
-
-.test-btn {
-  background: #3498db;
-  color: white;
-  border: none;
-  padding: 12px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-}
-
-.test-btn:hover:not(:disabled) {
-  background: #2980b9;
-  transform: translateY(-1px);
-}
-
-.test-btn:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-}
-
-.settings-actions {
-  display: flex;
-  gap: 15px;
-  justify-content: flex-end;
-  margin-top: 30px;
-}
-
-.save-btn, .cancel-btn {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.save-btn {
-  background: #27ae60;
-  color: white;
-}
-
-.save-btn:hover:not(:disabled) {
-  background: #219a52;
-  transform: translateY(-1px);
-}
-
-.save-btn:disabled {
-  background: #bdc3c7;
-  cursor: not-allowed;
-}
-
-.cancel-btn {
-  background: #e74c3c;
-  color: white;
-}
-
-.cancel-btn:hover {
-  background: #c0392b;
-  transform: translateY(-1px);
-}
-
-.error {
-  color: #e74c3c;
-  font-size: 14px;
-  margin-top: 8px;
-  padding: 8px;
-  background: rgba(231, 76, 60, 0.1);
-  border-radius: 6px;
-}
-
-.success {
-  color: #27ae60;
-  font-size: 14px;
-  margin-top: 8px;
-  padding: 8px;
-  background: rgba(39, 174, 96, 0.1);
-  border-radius: 6px;
-}
-
-.info {
-  color: #3498db;
-  font-size: 14px;
-  margin-top: 8px;
-  padding: 8px;
-  background: rgba(52, 152, 219, 0.1);
-  border-radius: 6px;
-}
-
-/* 翻译区域头部样式 */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.section-header h2 {
-  margin: 0;
-  color: #2c3e50;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.connection-status {
-  padding: 6px 12px;
-  border-radius: 15px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.connection-status.configured {
-  background: rgba(39, 174, 96, 0.1);
-  color: #27ae60;
-  border: 1px solid rgba(39, 174, 96, 0.3);
-}
-
-.connection-status.not-configured {
-  background: rgba(230, 126, 34, 0.1);
-  color: #e67e22;
-  border: 1px solid rgba(230, 126, 34, 0.3);
-}
-
-.settings-btn {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  color: #667eea;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.settings-btn:hover {
-  background: #667eea;
-  color: white;
-  transform: translateY(-1px);
-}
-
-.config-warning {
-  background: rgba(230, 126, 34, 0.1);
-  border: 1px solid rgba(230, 126, 34, 0.3);
-  border-radius: 12px;
-  padding: 20px;
-  text-align: center;
-  margin-bottom: 20px;
-}
-
-.config-warning p {
-  margin: 0 0 15px 0;
-  color: #e67e22;
-}
-
-.config-btn {
-  background: #e67e22;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.config-btn:hover {
-  background: #d35400;
-  transform: translateY(-1px);
-}
-
-/* 移动端适配样式 */
-@media (max-width: 768px) {
-  #app {
-    padding: 10px;
-  }
-  
-  .settings-content {
-    width: 95%;
-    padding: 20px;
-    max-height: 90vh;
-  }
-  
-  .translation-section, .results-section {
-    padding: 15px;
-    margin-bottom: 15px;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .header-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-  
-  .language-checkboxes {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-  
-  .checkbox-label {
-    font-size: 13px;
-    padding: 8px;
-  }
-  
-  .model-selection {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .settings-actions {
-    flex-direction: column;
-    gap: 10px;
-  }
-  
-  .save-btn, .cancel-btn {
-    width: 100%;
-  }
-  
-  .translation-result {
-    padding: 12px;
-  }
-  
-  .result-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .play-controls {
-    gap: 8px;
-  }
-  
-  .play-btn, .play-all-btn, .stop-btn {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-}
-
-@media (max-width: 480px) {
-  .language-checkboxes {
-    grid-template-columns: 1fr;
-  }
-  
-  .checkbox-label {
-    padding: 10px;
-  }
-  
-  .settings-content {
-    padding: 15px;
-  }
-  
-  .connection-status {
-    font-size: 11px;
-    padding: 4px 8px;
-  }
-}
+<style>
+@import './assets/styles.css';
 </style>
