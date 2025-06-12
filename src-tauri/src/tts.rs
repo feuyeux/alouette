@@ -325,69 +325,22 @@ impl TTSEngine {
             })
     }
 
-    pub fn detect_language(&self, text: &str) -> String {
-        // Detect Chinese characters
-        let chinese_chars: Vec<char> = text.chars().filter(|c| '\u{4e00}' <= *c && *c <= '\u{9fff}').collect();
-        if !chinese_chars.is_empty() {
-            return "zh-CN".to_string();
-        }
-
-        // Detect Japanese characters (Hiragana, Katakana)
-        let japanese_chars: Vec<char> = text.chars().filter(|c| 
-            ('\u{3040}' <= *c && *c <= '\u{309f}') || // Hiragana
-            ('\u{30a0}' <= *c && *c <= '\u{30ff}')    // Katakana
-        ).collect();
-        if !japanese_chars.is_empty() {
-            return "ja-JP".to_string();
-        }
-
-        // Detect Korean characters
-        let korean_chars: Vec<char> = text.chars().filter(|c| '\u{ac00}' <= *c && *c <= '\u{d7af}').collect();
-        if !korean_chars.is_empty() {
-            return "ko-KR".to_string();
-        }
-
-        // Detect Arabic characters
-        let arabic_chars: Vec<char> = text.chars().filter(|c| '\u{0600}' <= *c && *c <= '\u{06ff}').collect();
-        if !arabic_chars.is_empty() {
-            return "ar-SA".to_string();
-        }
-
-        // Detect Greek characters
-        let greek_chars: Vec<char> = text.chars().filter(|c| '\u{0370}' <= *c && *c <= '\u{03ff}').collect();
-        if !greek_chars.is_empty() {
-            return "el-GR".to_string();
-        }
-
-        // Detect Cyrillic characters (Russian)
-        let cyrillic_chars: Vec<char> = text.chars().filter(|c| '\u{0400}' <= *c && *c <= '\u{04ff}').collect();
-        if !cyrillic_chars.is_empty() {
-            return "ru-RU".to_string();
-        }
-
-        // Default to English
-        "en-US".to_string()
-    }
-
     pub async fn synthesize_speech(&self, text: &str, language: &str) -> Result<Vec<u8>, String> {
+        // Safe string truncation that respects UTF-8 character boundaries
+        let display_text = Self::safe_truncate(text, 50);
+        
         println!("TTS synthesis request: language={}, text_length={}, content='{}'", 
-                 language, text.len(), 
-                 if text.len() > 50 { format!("{}...", &text[..50]) } else { text.to_string() });
+                 language, text.chars().count(), display_text);
 
-        // If no voice configuration is found, try auto-detecting the language
-        let final_language = if self.select_voice_for_language(language).is_none() {
-            let detected = self.detect_language(text);
-            println!("Language '{}' not found in configuration, auto-detected language: {}", language, detected);
-            detected
-        } else {
-            language.to_string()
-        };
+        // Directly use the provided language, trusting frontend information
+        let selected_voice = self.select_voice_for_language(language)
+            .ok_or_else(|| {
+                let error_msg = format!("No voice configuration found for language '{}'. Available languages: English, French, Spanish, Italian, Russian, Greek, German, Hindi, Arabic, Japanese, Korean, Chinese", language);
+                println!("{}", error_msg);
+                error_msg
+            })?;
 
-        // Select voice
-        let selected_voice = self.select_voice_for_language(&final_language)
-            .ok_or_else(|| format!("No voice configuration found for language '{}'", final_language))?;
-
-        println!("Selected voice: {} ({}) - Final language: {}", selected_voice.edge_voice, selected_voice.display_name, final_language);
+        println!("Selected voice: {} ({}) for language: {}", selected_voice.edge_voice, selected_voice.display_name, language);
 
         // Generate cache key
         let cache_key = self.generate_cache_key(text, &selected_voice.edge_voice);
@@ -409,7 +362,16 @@ impl TTSEngine {
             },
             Err(e) => {
                 println!("Edge TTS failed: {}, trying local TTS", e);
-                self.synthesize_with_local_tts(text, &selected_voice.locale).await?
+                match self.synthesize_with_local_tts(text, &selected_voice.locale).await {
+                    Ok(audio_data) => {
+                        println!("Local TTS synthesis successful, audio size: {} bytes", audio_data.len());
+                        audio_data
+                    },
+                    Err(local_e) => {
+                        println!("Local TTS also failed: {}", local_e);
+                        return Err(format!("All TTS methods failed. Edge TTS: {}. Local TTS: {}", e, local_e));
+                    }
+                }
             }
         };
 
@@ -486,41 +448,55 @@ impl TTSEngine {
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join(format!("local_tts_{}.wav", uuid::Uuid::new_v4()));
 
-        // Map locale to espeak voice
+        // Enhanced locale to espeak voice mapping with better support
         let espeak_voice = match locale {
             "zh-CN" => "zh",
-            "en-US" => "en",
-            "ja-JP" => "ja",
+            "en-US" => "en-us",
+            "ja-JP" => "ja", 
             "ko-KR" => "ko",
             "fr-FR" => "fr",
-            "de-DE" => "de",
+            "de-DE" => "de", 
             "es-ES" => "es",
             "it-IT" => "it",
             "ru-RU" => "ru",
-            "ar-SA" => "ar",
-            "el-GR" => "el",
-            "hi-IN" => "hi",
-            _ => "en",
+            "ar-SA" => "ar",  // Arabic
+            "el-GR" => "el",  // Greek
+            "hi-IN" => "hi",  // Hindi
+            _ => "en-us",
         };
 
-        // Try different TTS engines
         let temp_file_str = temp_file.to_str().unwrap();
+        
+        // Enhanced TTS commands with better parameters
         let tts_commands = vec![
+            // espeak-ng with optimized settings for each language
             ("espeak-ng", vec![
                 "-v", espeak_voice,
-                "-s", "150",
-                "-a", "100",
+                "-s", "160",     // Slightly faster speech rate  
+                "-a", "80",      // Reduced amplitude to prevent distortion
+                "-g", "5",       // Small gap between words
                 "-w", temp_file_str,
                 text
             ]),
-            ("flite", vec![
-                "-t", text,
-                "-o", temp_file_str
+            // Fallback to basic espeak if espeak-ng fails
+            ("espeak", vec![
+                "-v", espeak_voice,
+                "-s", "160",
+                "-a", "80", 
+                "-w", temp_file_str,
+                text
+            ]),
+            // Festival as another fallback (English only)
+            ("text2wave", vec![
+                "-o", temp_file_str,
+                text
             ]),
         ];
 
+        let mut last_error = String::new();
+        
         for (cmd, args) in &tts_commands {
-            println!("Trying local TTS: {} {:?}", cmd, args);
+            println!("Trying local TTS: {} with voice '{}' for locale '{}'", cmd, espeak_voice, locale);
             
             let output = Command::new(cmd)
                 .args(args.iter())
@@ -529,34 +505,87 @@ impl TTSEngine {
             match output {
                 Ok(result) if result.status.success() => {
                     if temp_file.exists() {
-                        let mut file = File::open(&temp_file).await
-                            .map_err(|e| format!("Failed to open audio file: {}", e))?;
-                        
-                        let mut audio_data = Vec::new();
-                        file.read_to_end(&mut audio_data).await
-                            .map_err(|e| format!("Failed to read audio file: {}", e))?;
-                        
-                        let _ = tokio::fs::remove_file(&temp_file).await;
-                        
-                        if !audio_data.is_empty() {
-                            println!("Local TTS synthesis successful: {}, audio size: {} bytes", cmd, audio_data.len());
-                            return Ok(audio_data);
+                        match self.read_and_validate_audio_file(&temp_file).await {
+                            Ok(audio_data) => {
+                                let _ = tokio::fs::remove_file(&temp_file).await;
+                                println!("Local TTS synthesis successful: {}, audio size: {} bytes", cmd, audio_data.len());
+                                return Ok(audio_data);
+                            },
+                            Err(e) => {
+                                last_error = format!("{} generated invalid audio: {}", cmd, e);
+                                println!("{}", last_error);
+                            }
                         }
+                    } else {
+                        last_error = format!("{} did not generate audio file", cmd);
+                        println!("{}", last_error);
                     }
                 },
                 Ok(result) => {
-                    println!("TTS command failed: {} (status: {})", cmd, result.status);
+                    let stderr = String::from_utf8_lossy(&result.stderr);
+                    last_error = format!("{} failed (status: {}): {}", cmd, result.status, stderr);
+                    println!("{}", last_error);
                 },
                 Err(e) => {
-                    println!("TTS command not available: {} ({})", cmd, e);
+                    last_error = format!("{} command not available: {}", cmd, e);
+                    println!("{}", last_error);
                 }
             }
         }
 
-        Err("All TTS engines are unavailable".to_string())
+        Err(format!("All local TTS engines failed. Last error: {}", last_error))
+    }
+    
+    // Text preprocessing for better TTS results
+    // Helper function to read and validate audio files
+    async fn read_and_validate_audio_file(&self, file_path: &std::path::Path) -> Result<Vec<u8>, String> {
+        let mut file = File::open(file_path).await
+            .map_err(|e| format!("Failed to open audio file: {}", e))?;
+        
+        let mut audio_data = Vec::new();
+        file.read_to_end(&mut audio_data).await
+            .map_err(|e| format!("Failed to read audio file: {}", e))?;
+        
+        if audio_data.is_empty() {
+            return Err("Generated audio file is empty".to_string());
+        }
+        
+        // Basic audio file validation - check for common audio headers
+        let is_valid_audio = audio_data.len() > 44 && (
+            // WAV file
+            audio_data.starts_with(b"RIFF") ||
+            // MP3 file
+            audio_data.starts_with(&[0xFF, 0xFB]) || audio_data.starts_with(&[0xFF, 0xFA]) ||
+            // OGG file
+            audio_data.starts_with(b"OggS") ||
+            // Basic audio content check
+            audio_data.len() > 1000
+        );
+        
+        if !is_valid_audio {
+            return Err(format!("Generated audio file appears invalid (size: {} bytes)", audio_data.len()));
+        }
+        
+        Ok(audio_data)
+    }
+
+    /// Safely truncate a UTF-8 string to a maximum number of characters
+    /// This prevents panics when dealing with multi-byte Unicode characters
+    fn safe_truncate(text: &str, max_chars: usize) -> String {
+        if text.chars().count() <= max_chars {
+            text.to_string()
+        } else {
+            format!("{}...", text.chars().take(max_chars).collect::<String>())
+        }
     }
 
     pub async fn play_audio_from_bytes(&self, audio_data: &[u8]) -> Result<(), String> {
+        if audio_data.is_empty() {
+            return Err("Audio data is empty - nothing to play".to_string());
+        }
+        
+        println!("Starting audio playback, data size: {} bytes", audio_data.len());
+        
         // Use rodio to play audio
         let (_stream, stream_handle) = OutputStream::try_default()
             .map_err(|e| format!("Failed to create audio output stream: {}", e))?;
@@ -568,10 +597,26 @@ impl TTSEngine {
         let audio_vec = audio_data.to_vec();
         let cursor = Cursor::new(audio_vec);
         let source = Decoder::new(cursor)
-            .map_err(|e| format!("Failed to decode audio data: {}", e))?;
+            .map_err(|e| {
+                println!("Failed to decode audio data (size: {} bytes): {}", audio_data.len(), e);
+                format!("Failed to decode audio data: {}. This might indicate corrupted audio or unsupported format.", e)
+            })?;
 
         sink.append(source);
-        sink.sleep_until_end();
+        
+        // Add timeout to prevent hanging
+        let play_duration = std::time::Duration::from_secs(30); // Max 30 seconds for any TTS
+        let start_time = std::time::Instant::now();
+        
+        while !sink.empty() && start_time.elapsed() < play_duration {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        
+        if start_time.elapsed() >= play_duration {
+            println!("TTS playback timeout - stopping playback");
+            sink.stop();
+            return Err("TTS playback timeout".to_string());
+        }
 
         Ok(())
     }

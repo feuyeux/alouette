@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "identifier": "com.alouette.app",
   "build": {
-    "beforeDevCommand": "vite --port 1421 --strictPort",
+    "beforeDevCommand": "vite --port 1422 --strictPort",
     "beforeBuildCommand": "npm run vite:build",
-    "devUrl": "http://localhost:1421",
+    "devUrl": "http://localhost:1422",
     "frontendDist": "../dist"
   },
   "app": {

@@ -121,66 +121,95 @@ async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &str, 
         _ => target_lang,
     };
 
-    let prompt = format!("Translate '{}' to {}:", text, english_lang);
-    println!("Generated prompt: {}", prompt);
-    
-    // Prepare request body with optimized parameters for translation
-    let request_body = serde_json::json!({
-        "model": model_name,
-        "prompt": prompt,
-        "stream": false,
-        "options": {
-            "temperature": 0.0,    // Deterministic output for consistent translations
-            "num_predict": 15      // Limit output length for concise translations
-        }
-    });
+    // Enhanced prompts with better context and instructions
+    let prompts = vec![
+        format!(
+            "Translate this Chinese text to {}: \"{}\"\n\nIMPORTANT:\n- Only output the direct translation\n- No explanations or notes\n- Preserve the exact meaning\n- Use natural {} expressions\n\nTranslation:",
+            english_lang, text, english_lang
+        ),
+        format!(
+            "Chinese: \"{}\"\n{}: ",
+            text, english_lang
+        ),
+        format!(
+            "Please translate \"{}\" from Chinese into {}. Output only the translation:",
+            text, english_lang
+        ),
+    ];
 
     let api_url = format!("{}/api/generate", ollama_url.trim_end_matches('/'));
-    println!("Sending request to: {}", api_url);
     
-    // Send request to Ollama API
-    let response = client
-        .post(&api_url)
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to connect to Ollama server: {}", e))?;
+    // Try each prompt until we get a good translation
+    for (i, prompt) in prompts.iter().enumerate() {
+        println!("Trying prompt #{}: {}", i + 1, prompt);
+        
+        // Prepare request body with optimized parameters for translation
+        let request_body = serde_json::json!({
+            "model": model_name,
+            "prompt": prompt,
+            "stream": false,
+             "think": false, 
+            "options": {
+                "temperature": 0.2,    // Lower temperature for more consistent translations
+                "num_predict": 150,    // Increased to allow for complete translations
+                "top_p": 0.8,
+                "repeat_penalty": 1.1,
+                "top_k": 20
+            }
+        });
 
-    if !response.status().is_success() {
-        let error_msg = format!("Ollama API returned error status: {}", response.status());
-        println!("{}", error_msg);
-        return Err(error_msg);
+        println!("Sending request to: {}", api_url);
+        
+        // Send request to Ollama API
+        let response = client
+            .post(&api_url)
+            .json(&request_body)
+            .send()
+            .await;
+
+        match response {
+            Ok(resp) if resp.status().is_success() => {
+                // Parse response
+                let response_text = resp.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+                let response_json: serde_json::Value = serde_json::from_str(&response_text)
+                    .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
+                
+                let translation = response_json["response"]
+                    .as_str()
+                    .unwrap_or("")
+                    .trim();
+                
+                println!("Raw response: '{}'", translation);
+                println!("Translation length: {}", translation.len());
+                
+                // Enhanced quality check for translations
+                if !translation.is_empty() && 
+                   translation.len() > 1 &&
+                   translation != text &&
+                   !translation.to_lowercase().contains("i don't know") &&
+                   !translation.to_lowercase().contains("i cannot") &&
+                   !translation.to_lowercase().contains("sorry") &&
+                   !translation.to_lowercase().contains("translate") &&
+                   !translation.to_lowercase().contains("translation") &&
+                   !translation.to_lowercase().contains("chinese") &&
+                   !translation.contains(text) {  // Avoid responses that contain original text
+                    println!("Translation successful with prompt #{}: {} -> {}", i + 1, text, translation);
+                    return Ok(translation.to_string());
+                }
+                
+                println!("Translation attempt #{} was not satisfactory, trying next prompt", i + 1);
+            },
+            Ok(resp) => {
+                println!("HTTP error for prompt #{}: {}", i + 1, resp.status());
+            },
+            Err(e) => {
+                println!("Request failed for prompt #{}: {}", i + 1, e);
+            }
+        }
     }
 
-    // Parse response
-    let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
-    let response_json: serde_json::Value = serde_json::from_str(&response_text)
-        .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
-    
-    let translation = response_json["response"]
-        .as_str()
-        .unwrap_or("")
-        .trim();
-    
-    let cleaned_translation = clean_ollama_response(translation);
-    println!("Cleaned translation result: '{}'", cleaned_translation);
-    Ok(cleaned_translation)
-}
-
-/**
- * Clean up Ollama response by removing common artifacts
- * Removes model-specific tokens and formatting issues
- * 
- * @param response - Raw response from Ollama
- * @returns Cleaned translation text
- */
-fn clean_ollama_response(response: &str) -> String {
-    response.trim()
-        .replace("<|im_start|>", "")
-        .replace("<|im_end|>", "")
-        .replace("\"", "")
-        .trim()
-        .to_string()
+    // If all prompts failed, return an error
+    Err(format!("All translation attempts failed for text: '{}' to language: '{}'", text, target_lang))
 }
 
 // ================================
@@ -443,6 +472,10 @@ fn greet(name: &str) -> String {
     println!("Greeting request for: {}", name);
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
+
+// ================================
+// Debug Commands
+// ================================
 
 // ================================
 // Application Entry Point
