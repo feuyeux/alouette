@@ -138,5 +138,14 @@ npm run build:android    # Android APK
 npm run build:ios        # iOS app (macOS only)
 ```
 
-我想要一杯咖啡，给他点一杯绿茶，谢谢。
-qwen2.5:1.5b
+## Demo
+
+<iframe src="//player.bilibili.com/player.html?bvid=BV1qRM6zjErY&page=1&autoplay=0" 
+        width="800" 
+        height="450" 
+        scrolling="no" 
+        border="0" 
+        frameborder="no" 
+        framespacing="0" 
+        allowfullscreen="true">
+</iframe>
