@@ -8,7 +8,7 @@
     "dev": "tauri dev",
     "build": "tauri build",
     "build:android": "tauri android build",
-    "build:ios": "tauri ios build", 
+    "build:ios": "tauri ios build",
     "dev:android": "tauri android dev",
     "dev:ios": "tauri ios dev",
     "vite:build": "vite build",
@@ -22,7 +22,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-vue": "^5",
-    "vite": "^6"
+    "vite": "^6.3.5"
   },
   "keywords": [
     "translation",

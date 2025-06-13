@@ -1,20 +1,26 @@
-use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 mod tts;
+mod ollama;
+mod lm_studio;
+
 use tts::TTSEngine;
+use ollama::{call_ollama_translate, connect_ollama_internal};
+use lm_studio::{call_lmstudio_translate, connect_lmstudio_internal};
 
 /**
  * Request structure for translation operations
- * Contains the text to translate, target languages, and Ollama configuration
+ * Contains the text to translate, target languages, and LLM provider configuration
  */
 #[derive(Debug, Serialize, Deserialize)]
 struct TranslationRequest {
     text: String,
     target_languages: Vec<String>,
-    ollama_url: String,
+    provider: String,
+    server_url: String,
     model_name: String,
+    api_key: Option<String>,
 }
 
 /**
@@ -27,41 +33,17 @@ struct TranslationResponse {
 }
 
 /**
- * Request structure for Ollama API calls
- * Matches the Ollama API specification for generation requests
- */
-#[derive(Debug, Serialize, Deserialize)]
-struct OllamaRequest {
-    model: String,
-    prompt: String,
-    stream: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    system: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    options: Option<serde_json::Value>,
-}
-
-/**
- * Response structure for Ollama API responses
- * Contains the generated text response from the model
- */
-#[derive(Debug, Serialize, Deserialize)]
-struct OllamaResponse {
-    response: String,
-}
-
-/**
  * Main translation command exposed to the frontend
- * Translates text to multiple target languages using configured Ollama server
+ * Translates text to multiple target languages using configured LLM provider
  * 
- * @param request - Translation request containing text, languages, and server config
+ * @param request - Translation request containing text, languages, and provider config
  * @returns Translation response with results for each language
  */
 #[tauri::command]
 async fn translate_text(request: TranslationRequest) -> Result<TranslationResponse, String> {
     println!("Starting translation process for text: '{}'", request.text);
     println!("Target languages: {:?}", request.target_languages);
-    println!("Using Ollama server: {}", request.ollama_url);
+    println!("Using {} provider: {}", request.provider, request.server_url);
     println!("Using model: {}", request.model_name);
     
     let mut translations = HashMap::new();
@@ -70,7 +52,13 @@ async fn translate_text(request: TranslationRequest) -> Result<TranslationRespon
     for lang in &request.target_languages {
         println!("Translating to {}", lang);
         
-        match call_ollama_translate(&request.text, lang, &request.ollama_url, &request.model_name).await {
+        let translation_result = match request.provider.as_str() {
+            "ollama" => call_ollama_translate(&request.text, lang, &request.server_url, &request.model_name).await,
+            "lmstudio" => call_lmstudio_translate(&request.text, lang, &request.server_url, &request.model_name, request.api_key.as_deref()).await,
+            _ => Err(format!("Unsupported provider: {}", request.provider))
+        };
+        
+        match translation_result {
             Ok(translation) => {
                 println!("Successfully translated to {}: '{}'", lang, translation);
                 translations.insert(lang.clone(), translation);
@@ -84,132 +72,6 @@ async fn translate_text(request: TranslationRequest) -> Result<TranslationRespon
     
     println!("Translation process completed successfully");
     Ok(TranslationResponse { translations })
-}
-
-/**
- * Internal function to call Ollama API for translation
- * Handles the actual HTTP communication with the Ollama server
- * 
- * @param text - Text to translate
- * @param target_lang - Target language for translation
- * @param ollama_url - Ollama server URL
- * @param model_name - AI model to use for translation
- * @returns Translated text or error message
- */
-async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &str, model_name: &str) -> Result<String, String> {
-    println!("Preparing Ollama API call for translation to {}", target_lang);
-    
-    // Create HTTP client with timeout
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    
-    // Map Chinese language names to English for better translation results
-    let english_lang = match target_lang {
-        "English" => "English",
-        "Japanese" => "Japanese", 
-        "Korean" => "Korean",
-        "French" => "French",
-        "German" => "German",
-        "Spanish" => "Spanish",
-        "Russian" => "Russian",
-        "Italian" => "Italian",
-        "Hindi" => "Hindi",
-        "Greek" => "Greek",
-        "Arabic" => "Arabic",
-        _ => target_lang,
-    };
-
-    // Enhanced prompts with better context and instructions
-    let prompts = vec![
-        format!(
-            "Translate this Chinese text to {}: \"{}\"\n\nIMPORTANT:\n- Only output the direct translation\n- No explanations or notes\n- Preserve the exact meaning\n- Use natural {} expressions\n\nTranslation:",
-            english_lang, text, english_lang
-        ),
-        format!(
-            "Chinese: \"{}\"\n{}: ",
-            text, english_lang
-        ),
-        format!(
-            "Please translate \"{}\" from Chinese into {}. Output only the translation:",
-            text, english_lang
-        ),
-    ];
-
-    let api_url = format!("{}/api/generate", ollama_url.trim_end_matches('/'));
-    
-    // Try each prompt until we get a good translation
-    for (i, prompt) in prompts.iter().enumerate() {
-        println!("Trying prompt #{}: {}", i + 1, prompt);
-        
-        // Prepare request body with optimized parameters for translation
-        let request_body = serde_json::json!({
-            "model": model_name,
-            "prompt": prompt,
-            "stream": false,
-             "think": false, 
-            "options": {
-                "temperature": 0.2,    // Lower temperature for more consistent translations
-                "num_predict": 150,    // Increased to allow for complete translations
-                "top_p": 0.8,
-                "repeat_penalty": 1.1,
-                "top_k": 20
-            }
-        });
-
-        println!("Sending request to: {}", api_url);
-        
-        // Send request to Ollama API
-        let response = client
-            .post(&api_url)
-            .json(&request_body)
-            .send()
-            .await;
-
-        match response {
-            Ok(resp) if resp.status().is_success() => {
-                // Parse response
-                let response_text = resp.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
-                let response_json: serde_json::Value = serde_json::from_str(&response_text)
-                    .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
-                
-                let translation = response_json["response"]
-                    .as_str()
-                    .unwrap_or("")
-                    .trim();
-                
-                println!("Raw response: '{}'", translation);
-                println!("Translation length: {}", translation.len());
-                
-                // Enhanced quality check for translations
-                if !translation.is_empty() && 
-                   translation.len() > 1 &&
-                   translation != text &&
-                   !translation.to_lowercase().contains("i don't know") &&
-                   !translation.to_lowercase().contains("i cannot") &&
-                   !translation.to_lowercase().contains("sorry") &&
-                   !translation.to_lowercase().contains("translate") &&
-                   !translation.to_lowercase().contains("translation") &&
-                   !translation.to_lowercase().contains("chinese") &&
-                   !translation.contains(text) {  // Avoid responses that contain original text
-                    println!("Translation successful with prompt #{}: {} -> {}", i + 1, text, translation);
-                    return Ok(translation.to_string());
-                }
-                
-                println!("Translation attempt #{} was not satisfactory, trying next prompt", i + 1);
-            },
-            Ok(resp) => {
-                println!("HTTP error for prompt #{}: {}", i + 1, resp.status());
-            },
-            Err(e) => {
-                println!("Request failed for prompt #{}: {}", i + 1, e);
-            }
-        }
-    }
-
-    // If all prompts failed, return an error
-    Err(format!("All translation attempts failed for text: '{}' to language: '{}'", text, target_lang))
 }
 
 // ================================
@@ -376,48 +238,27 @@ fn get_available_tts_voices() -> Result<Vec<serde_json::Value>, String> {
 #[tauri::command]
 async fn connect_ollama(ollama_url: String) -> Result<Vec<String>, String> {
     println!("Testing connection to Ollama server: {}", ollama_url);
+    connect_ollama_internal(ollama_url).await
+}
+
+/**
+ * Connect to LLM provider and retrieve available models
+ * Supports both Ollama and LM Studio (OpenAI-compatible) APIs
+ * 
+ * @param provider - Provider type ("ollama" or "lmstudio")
+ * @param server_url - Server URL
+ * @param api_key - Optional API key for authentication
+ * @returns List of available model names
+ */
+#[tauri::command]
+async fn connect_llm(provider: String, server_url: String, api_key: Option<String>) -> Result<Vec<String>, String> {
+    println!("Testing connection to {} server: {}", provider, server_url);
     
-    let client = reqwest::Client::new();
-    let api_url = format!("{}/api/tags", ollama_url.trim_end_matches('/'));
-    
-    println!("Sending request to: {}", api_url);
-    
-    let response = client
-        .get(&api_url)
-        .send()
-        .await
-        .map_err(|e| {
-            let error_msg = format!("Connection failed: {}", e);
-            println!("{}", error_msg);
-            error_msg
-        })?;
-    
-    let response_text = response
-        .text()
-        .await
-        .map_err(|e| {
-            let error_msg = format!("Failed to read response: {}", e);
-            println!("{}", error_msg);
-            error_msg
-        })?;
-    
-    let response_json: serde_json::Value = serde_json::from_str(&response_text)
-        .map_err(|e| {
-            let error_msg = format!("Failed to parse response: {}", e);
-            println!("{}", error_msg);
-            error_msg
-        })?;
-    
-    let models: Vec<String> = response_json["models"]
-        .as_array()
-        .unwrap_or(&vec![])
-        .iter()
-        .filter_map(|model| model["name"].as_str())
-        .map(|name| name.to_string())
-        .collect();
-    
-    println!("Successfully retrieved {} models from Ollama server", models.len());
-    Ok(models)
+    match provider.as_str() {
+        "ollama" => connect_ollama_internal(server_url).await,
+        "lmstudio" => connect_lmstudio_internal(server_url, api_key).await,
+        _ => Err(format!("Unsupported provider: {}", provider))
+    }
 }
 
 // ================================
@@ -506,8 +347,9 @@ pub fn run() {
             clear_tts_cache,
             get_tts_cache_info,
             
-            // Ollama integration
-            connect_ollama
+            // LLM integration
+            connect_ollama,
+            connect_llm
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

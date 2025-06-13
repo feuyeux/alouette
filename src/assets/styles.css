@@ -685,7 +685,18 @@ p {
   flex: 1;
   color: #374151;
   line-height: 1.4;
-  font-size: 14px;
+  font-size: 12px; /* 减小默认字体大小 */
+}
+
+/* 特殊语言的字体大小调整 */
+.translation-text.lang-hindi,
+.translation-text.lang-arabic {
+  font-size: 11px; /* 印地语和阿拉伯语使用更小的字体 */
+}
+
+/* 西里尔字符语言（俄语等）稍微调小 */
+.translation-text.lang-russian {
+  font-size: 11px;
 }
 
 /* ===================== Settings Panel ===================== */
@@ -1127,7 +1138,14 @@ p {
   }
   
   .translation-text {
-    font-size: 13px;
+    font-size: 11px; /* 移动端进一步减小字体 */
+  }
+  
+  /* 移动端特殊语言字体调整 */
+  .translation-text.lang-hindi,
+  .translation-text.lang-arabic,
+  .translation-text.lang-russian {
+    font-size: 10px; /* 移动端特殊语言使用更小字体 */
   }
   
   .language-grid {

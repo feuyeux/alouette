@@ -332,15 +332,39 @@ impl TTSEngine {
         println!("TTS synthesis request: language={}, text_length={}, content='{}'", 
                  language, text.chars().count(), display_text);
 
-        // Directly use the provided language, trusting frontend information
-        let selected_voice = self.select_voice_for_language(language)
+        // Basic text validation
+        if text.trim().is_empty() {
+            return Err("Cannot synthesize empty text".to_string());
+        }
+
+        // Language validation and detection
+        let final_language = if let Some(detected_script) = Self::detect_text_script(text) {
+            if detected_script != language {
+                println!("Warning: Language mismatch detected. Requested: {}, Text appears to be: {}", 
+                        language, detected_script);
+                // Use detected language if confidence is high
+                if Self::is_script_confident(&detected_script, text) {
+                    println!("Using detected language '{}' instead of requested '{}'", detected_script, language);
+                    detected_script
+                } else {
+                    language.to_string()
+                }
+            } else {
+                language.to_string()
+            }
+        } else {
+            language.to_string()
+        };
+
+        // Use the determined language for voice selection
+        let selected_voice = self.select_voice_for_language(&final_language)
             .ok_or_else(|| {
-                let error_msg = format!("No voice configuration found for language '{}'. Available languages: English, French, Spanish, Italian, Russian, Greek, German, Hindi, Arabic, Japanese, Korean, Chinese", language);
+                let error_msg = format!("No voice configuration found for language '{}'. Available languages: English, French, Spanish, Italian, Russian, Greek, German, Hindi, Arabic, Japanese, Korean, Chinese", final_language);
                 println!("{}", error_msg);
                 error_msg
             })?;
 
-        println!("Selected voice: {} ({}) for language: {}", selected_voice.edge_voice, selected_voice.display_name, language);
+        println!("Selected voice: {} ({}) for language: {}", selected_voice.edge_voice, selected_voice.display_name, final_language);
 
         // Generate cache key
         let cache_key = self.generate_cache_key(text, &selected_voice.edge_voice);
@@ -418,7 +442,13 @@ impl TTSEngine {
 
         if !output.status.success() {
             let error_msg = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("edge-tts execution failed: {}", error_msg));
+            let enhanced_error = if error_msg.contains("NoAudioReceived") {
+                format!("Edge TTS failed to generate audio - this usually indicates a language/voice mismatch or network issue. Voice: {}, Text sample: '{}'. Error: {}", 
+                        voice, Self::safe_truncate(text, 30), error_msg)
+            } else {
+                format!("edge-tts execution failed: {}", error_msg)
+            };
+            return Err(enhanced_error);
         }
 
         // Check if file was generated
@@ -576,6 +606,86 @@ impl TTSEngine {
             text.to_string()
         } else {
             format!("{}...", text.chars().take(max_chars).collect::<String>())
+        }
+    }
+
+    /// Detect the script/writing system of the text to help with language detection
+    fn detect_text_script(text: &str) -> Option<String> {
+        let chars: Vec<char> = text.chars().collect();
+        let total_chars = chars.len();
+        
+        if total_chars == 0 {
+            return None;
+        }
+        
+        let mut chinese_chars = 0;
+        let mut japanese_chars = 0;
+        let mut korean_chars = 0;
+        let mut arabic_chars = 0;
+        let mut hindi_chars = 0;
+        let mut cyrillic_chars = 0;
+        let mut greek_chars = 0;
+        
+        for ch in chars {
+            let code = ch as u32;
+            match code {
+                // CJK Unified Ideographs - could be Chinese or Japanese
+                0x4E00..=0x9FFF => chinese_chars += 1,
+                // Hiragana (Japanese)
+                0x3040..=0x309F => japanese_chars += 1,
+                // Katakana (Japanese)
+                0x30A0..=0x30FF => japanese_chars += 1,
+                // Hangul (Korean)
+                0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F => korean_chars += 1,
+                // Arabic
+                0x0600..=0x06FF | 0x0750..=0x077F => arabic_chars += 1,
+                // Devanagari (Hindi)
+                0x0900..=0x097F => hindi_chars += 1,
+                // Cyrillic (Russian)
+                0x0400..=0x04FF => cyrillic_chars += 1,
+                // Greek
+                0x0370..=0x03FF => greek_chars += 1,
+                _ => {}
+            }
+        }
+        
+        let threshold = total_chars / 3; // At least 1/3 of characters should match
+        
+        if korean_chars > threshold {
+            Some("Korean".to_string())
+        } else if japanese_chars > 0 || (chinese_chars > 0 && japanese_chars >= chinese_chars / 4) {
+            // If we have any Hiragana/Katakana, or significant Japanese markers, it's Japanese
+            Some("Japanese".to_string())
+        } else if chinese_chars > threshold {
+            Some("Chinese".to_string())
+        } else if arabic_chars > threshold {
+            Some("Arabic".to_string())
+        } else if hindi_chars > threshold {
+            Some("Hindi".to_string())
+        } else if cyrillic_chars > threshold {
+            Some("Russian".to_string())
+        } else if greek_chars > threshold {
+            Some("Greek".to_string())
+        } else {
+            None // Latin-based or mixed scripts
+        }
+    }
+
+    /// Check if the script detection is confident enough to override user input
+    fn is_script_confident(detected: &str, text: &str) -> bool {
+        let chars: Vec<char> = text.chars().collect();
+        let total_chars = chars.len();
+        
+        if total_chars < 3 {
+            return false; // Too short to be confident
+        }
+        
+        match detected {
+            "Chinese" | "Japanese" | "Korean" | "Arabic" | "Hindi" | "Russian" | "Greek" => {
+                // For non-Latin scripts, if detected, we're quite confident
+                true
+            }
+            _ => false
         }
     }
 

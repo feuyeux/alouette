@@ -7,11 +7,13 @@ A cross-platform translation and text-to-speech application built with **Tauri v
 ## 🚀 Environment Setup & Installation
 
 ### System Requirements
+
 - **Node.js**: 18+
 - **Rust**: 1.70+
 - **Ollama Server**: Local or remote Ollama service
 
 ### Linux (Ubuntu/Debian)
+
 ```bash
 # Install system dependencies
 sudo apt update && sudo apt install -y \
@@ -21,7 +23,7 @@ sudo apt update && sudo apt install -y \
   espeak-ng flite
 
 # Install Edge TTS (premium neural voices)
-pip3 install edge-tts
+pip3 install --use-pep517 edge-tts
 
 # Install project dependencies and run
 npm install
@@ -29,12 +31,21 @@ npm run dev
 ```
 
 ### macOS
+
 ```bash
 # Install Xcode Command Line Tools
 xcode-select --install
 
-# Install Edge TTS
-pip3 install edge-tts
+# Install TTS engines (at least one is required)
+brew install espeak-ng espeak
+
+# (Optional) Install Edge TTS for premium neural voices
+pip3 install --use-pep517 edge-tts
+
+npm install -g @tauri-apps/cli
+npm install --save-dev vite
+npm run build
+cd src-tauri && cargo build
 
 # Install and run
 npm install
@@ -42,12 +53,13 @@ npm run dev
 ```
 
 ### Windows
+
 ```bash
 # Install Visual Studio Build Tools first
 # Download: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
 # Install Edge TTS
-pip install edge-tts
+pip install --use-pep517 edge-tts
 
 # Install and run
 npm install
@@ -57,16 +69,17 @@ npm run dev
 ## ⚙️ Configuration
 
 ### Ollama Server Setup
+
 1. Start the app and click **"⚙️ Settings"**
 2. Enter Ollama server URL:
    - Local: `http://localhost:11434`
    - Remote: `https://your-domain.com:11434`
 3. Test connection, select model, and save
 
-
 ## 🏗️ System Architecture
 
 ### TTS Engine Strategy
+
 **Hybrid TTS System** with intelligent fallback:
 
 1. **Edge TTS** (Primary) - Premium neural voices, requires internet
@@ -74,6 +87,7 @@ npm run dev
 3. **flite** (Backup) - Lightweight local engine
 
 ### Tech Stack
+
 - **Frontend**: Vue 3.5 + Vite 6
 - **Backend**: Tauri 2.2 + Rust
 - **AI Service**: Ollama with Qwen2/Llama3.2 models
@@ -92,18 +106,18 @@ sequenceDiagram
 
     User->>Frontend: Input text & select languages
     User->>Frontend: Click "Translate"
-    
+
     Frontend->>Frontend: Validate configuration
     Frontend->>Backend: invoke('translate_text', request)
-    
+
     loop For each target language
         Backend->>Ollama: POST /api/generate
         Ollama-->>Backend: Translation response
     end
-    
+
     Backend-->>Frontend: Combined translations
     Frontend->>Frontend: Display results
-    
+
     User->>Frontend: Click "Play TTS"
     Frontend->>Backend: invoke('play_tts', text, lang)
     Backend->>TTS: Generate & play audio
@@ -112,6 +126,7 @@ sequenceDiagram
 ```
 
 ### Supported Languages
+
 English, Chinese, Japanese, Korean, French, German, Spanish, Italian, Russian, Arabic, Hindi, Greek
 
 ## 📦 Build Commands
@@ -122,3 +137,6 @@ npm run build            # Production build
 npm run build:android    # Android APK
 npm run build:ios        # iOS app (macOS only)
 ```
+
+我想要一杯咖啡，谢谢。
+qwen2.5:1.5b
