@@ -345,15 +345,26 @@
       </div>
 
       <div class="translate-button-container">
-        <button
-          @click="translateText"
-          :disabled="
-            !inputText.trim() || selectedLanguages.length === 0 || isTranslating
-          "
-          class="btn-primary btn-large"
-        >
-          {{ isTranslating ? "🔄 Translating..." : "🚀 Start Translation" }}
-        </button>
+        <div class="btn-group">
+          <button
+            @click="translateText"
+            :disabled="
+              !inputText.trim() ||
+              selectedLanguages.length === 0 ||
+              isTranslating
+            "
+            class="btn-primary btn-large"
+          >
+            {{ isTranslating ? "🔄 Translating..." : "🚀 Start Translation" }}
+          </button>
+          <button
+            @click="clearInput"
+            :disabled="!inputText.trim() && selectedLanguages.length === 0"
+            class="btn-secondary btn-large"
+          >
+            🗑️ Clear
+          </button>
+        </div>
       </div>
     </div>
 

@@ -138,5 +138,5 @@ npm run build:android    # Android APK
 npm run build:ios        # iOS app (macOS only)
 ```
 
-我想要一杯咖啡，谢谢。
+我想要一杯咖啡，给他点一杯绿茶，谢谢。
 qwen2.5:1.5b

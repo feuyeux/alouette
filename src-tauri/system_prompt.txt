@@ -8,8 +8,9 @@ CRITICAL TRANSLATION RULES:
 5. Provide the most natural and accurate translation
 6. Keep the same meaning and tone as the original
 7. If translating to Russian (русский), use ONLY Cyrillic characters
-8. If translating to Chinese (中文), use ONLY Chinese characters
-9. Complete the translation in pure {{lang}} only
+8. If translating to Chinese, use ONLY Chinese characters
+9. If translating to Arabic (العربية), use ONLY Arabic script characters (ا-ي) - NO Chinese, English, or other scripts
+10. Complete the translation in pure {{lang}} only
 
 Target language: {{lang}}
 Text to translate:

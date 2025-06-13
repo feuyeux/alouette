@@ -396,8 +396,8 @@ header {
 }
 
 .header-logo {
-  width: 40px;
-  height: 40px;
+  width: 64px;
+  height: 64px;
   filter: drop-shadow(0 2px 6px rgba(88, 204, 2, 0.2));
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: rgba(88, 204, 2, 0.08);
@@ -685,18 +685,18 @@ p {
   flex: 1;
   color: #374151;
   line-height: 1.4;
-  font-size: 12px; /* 减小默认字体大小 */
+  font-size: 15px; /* Increased default font size */
 }
 
-/* 特殊语言的字体大小调整 */
+/* Font size adjustments for special languages */
 .translation-text.lang-hindi,
 .translation-text.lang-arabic {
-  font-size: 11px; /* 印地语和阿拉伯语使用更小的字体 */
+  font-size: 16px; /* Appropriately increased for Hindi and Arabic */
 }
 
-/* 西里尔字符语言（俄语等）稍微调小 */
+/* Appropriately increased for Cyrillic character languages (Russian, etc.) */
 .translation-text.lang-russian {
-  font-size: 11px;
+  font-size: 16px;
 }
 
 /* ===================== Settings Panel ===================== */
@@ -1138,14 +1138,14 @@ p {
   }
   
   .translation-text {
-    font-size: 11px; /* 移动端进一步减小字体 */
+    font-size: 13px; /* Appropriately increased for mobile */
   }
   
-  /* 移动端特殊语言字体调整 */
+  /* Mobile font adjustments for special languages */
   .translation-text.lang-hindi,
   .translation-text.lang-arabic,
   .translation-text.lang-russian {
-    font-size: 10px; /* 移动端特殊语言使用更小字体 */
+    font-size: 12px; /* Appropriately increased for special languages on mobile */
   }
   
   .language-grid {

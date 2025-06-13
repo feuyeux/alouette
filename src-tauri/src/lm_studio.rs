@@ -110,7 +110,7 @@ pub async fn call_lmstudio_translate(text: &str, target_lang: &str, server_url: 
             if let Some(choice) = response_json.choices.first() {
                 let raw_translation = choice.message.content.trim();
                 if !raw_translation.is_empty() {
-                    // 清理翻译结果，移除可能的前缀、后缀和解释性文本
+                    // Clean translation result, remove possible prefixes, suffixes and explanatory text
                     let translation = clean_translation_result(raw_translation, target_lang);
                     println!("Translation result: '{}'", translation);
                     return Ok(translation);
@@ -189,7 +189,7 @@ pub async fn connect_lmstudio_internal(server_url: String, api_key: Option<Strin
 fn clean_translation_result(raw_text: &str, target_lang: &str) -> String {
     let mut cleaned = raw_text.trim().to_string();
     
-    // 移除常见的前缀和后缀
+    // Remove common prefixes and suffixes
     let lang_prefix = format!("{}:", target_lang);
     let in_lang_prefix = format!("In {}:", target_lang);
     
@@ -202,34 +202,41 @@ fn clean_translation_result(raw_text: &str, target_lang: &str) -> String {
         "Translation", "翻译", "Translated", "(translation)", "（翻译）"
     ];
     
-    // 移除前缀
+    // Remove prefixes
     for prefix in &prefixes_to_remove {
         if cleaned.starts_with(prefix) {
             cleaned = cleaned[prefix.len()..].trim_start().to_string();
         }
     }
     
-    // 移除后缀
+    // Remove suffixes
     for suffix in &suffixes_to_remove {
         if cleaned.ends_with(suffix) {
             cleaned = cleaned[..cleaned.len() - suffix.len()].trim_end().to_string();
         }
     }
     
-    // 移除引号（如果整个文本被引号包围）
+    // Remove quotes (if the entire text is surrounded by quotes)
     if (cleaned.starts_with('"') && cleaned.ends_with('"')) ||
        (cleaned.starts_with('\'') && cleaned.ends_with('\'')) ||
        (cleaned.starts_with('"') && cleaned.ends_with('"')) {
         cleaned = cleaned[1..cleaned.len()-1].to_string();
     }
     
-    // 移除多余的空白和换行
+    // Remove excess whitespace and newlines
     cleaned = cleaned.trim().replace('\n', " ").replace("  ", " ");
     
-    // 如果是俄语，确保只包含西里尔字符、标点和空格
+    // If it's Russian, ensure only Cyrillic characters, punctuation and spaces are included
     if target_lang.to_lowercase().contains("русский") || target_lang.to_lowercase().contains("russian") {
         cleaned = cleaned.chars()
             .filter(|c| c.is_whitespace() || is_cyrillic_or_punct(*c))
+            .collect();
+    }
+    
+    // If it's Arabic, ensure only Arabic characters, punctuation and spaces are included
+    if target_lang.to_lowercase().contains("arabic") || target_lang.to_lowercase().contains("العربية") {
+        cleaned = cleaned.chars()
+            .filter(|c| c.is_whitespace() || is_arabic_or_punct(*c))
             .collect();
     }
     
@@ -240,9 +247,24 @@ fn clean_translation_result(raw_text: &str, target_lang: &str) -> String {
  * Check if character is Cyrillic or common punctuation
  */
 fn is_cyrillic_or_punct(c: char) -> bool {
-    // 西里尔字符范围
+    // Cyrillic character ranges
     ('\u{0400}'..='\u{04FF}').contains(&c) ||  // Cyrillic
     ('\u{0500}'..='\u{052F}').contains(&c) ||  // Cyrillic Supplement
-    // 常见标点符号
+    // Common punctuation marks
     matches!(c, '.' | ',' | '!' | '?' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}' | '"' | '\'' | '«' | '»' | '—' | '–' | '-')
+}
+
+/**
+ * Check if character is Arabic or common punctuation
+ */
+fn is_arabic_or_punct(c: char) -> bool {
+    // Arabic character ranges
+    ('\u{0600}'..='\u{06FF}').contains(&c) ||  // Arabic
+    ('\u{0750}'..='\u{077F}').contains(&c) ||  // Arabic Supplement
+    ('\u{08A0}'..='\u{08FF}').contains(&c) ||  // Arabic Extended-A
+    ('\u{FB50}'..='\u{FDFF}').contains(&c) ||  // Arabic Presentation Forms-A
+    ('\u{FE70}'..='\u{FEFF}').contains(&c) ||  // Arabic Presentation Forms-B
+    // Common punctuation marks and numbers
+    matches!(c, '.' | ',' | '!' | '?' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}' | '"' | '\'' | '«' | '»' | '—' | '–' | '-') ||
+    c.is_ascii_digit()  // Allow numbers in Arabic text
 }

@@ -24,8 +24,25 @@ export default {
       inputText: '',
       selectedLanguages: [],
       availableLanguages: [
-        'English', 'Japanese', 'Korean', 'French', 'German', 'Spanish', 'Russian', 'Italian',
-        'Hindi', 'Greek', 'Arabic', 'Select All'
+        // (Germanic)
+        'English', 'German',
+        // (Romance) 
+        'French', 'Spanish', 'Italian',
+        // (Slavic)
+        'Russian',
+        // (Hellenic)
+        'Greek',
+        // (Indo-Aryan)
+        'Hindi',
+        // (Afro-Asiatic)
+        'Arabic',
+        // (Sino-Tibetan)
+        'Chinese',
+        // (Japonic)
+        'Japanese',
+        // (Koreanic)
+        'Korean',
+        'Select All'
       ],
       isTranslating: false,
       currentTranslation: null,
@@ -205,6 +222,7 @@ export default {
         return
       }
 
+      // Set loading state
       this.isTranslating = true
 
       try {
@@ -234,13 +252,13 @@ export default {
         this.currentTranslation = {
           original: this.inputText,
           translations: result.translations,
-          selectedLanguageOrder: [...realSelectedLanguages], // 保存用户选择语言的顺序
+          selectedLanguageOrder: [...realSelectedLanguages], // Preserve user's selected language order
           timestamp: new Date().toISOString()
         }
 
-        // Clear input for next translation
-        this.inputText = ''
-        this.selectedLanguages = []
+        // Keep input for potential re-translation with different settings
+        // this.inputText = ''
+        // this.selectedLanguages = []
 
       } catch (error) {
         console.error('Translation failed:', error)
@@ -302,16 +320,16 @@ export default {
         console.log('Playing original text:', this.currentTranslation.original, 'Detected language:', originalLanguage)
         await this.playTTSPromise(this.currentTranslation.original, originalLanguage)
 
-        // Then play all translations sequentially
-        for (const [lang, translation] of Object.entries(this.currentTranslation.translations)) {
+        // Use orderedLanguages to play translations in the same order as displayed
+        for (const lang of this.orderedLanguages) {
           if (!this.isPlayingAll) break // User interrupted playback
 
           // Brief pause between languages
           await new Promise(resolve => setTimeout(resolve, this.ttsSettings.pauseBetweenLanguages))
 
-          if (this.isPlayingAll) {
-            console.log(`Playing ${lang}:`, translation)
-            await this.playTTSPromise(translation, lang)
+          if (this.isPlayingAll && this.currentTranslation.translations[lang]) {
+            console.log(`Playing ${lang}:`, this.currentTranslation.translations[lang])
+            await this.playTTSPromise(this.currentTranslation.translations[lang], lang)
           }
         }
 
@@ -692,6 +710,15 @@ export default {
       }
 
       return '';
-    }
+    },
+
+    /**
+     * Clear input text and selected languages
+     */
+    clearInput() {
+      console.log('Clearing input text and selected languages')
+      this.inputText = ''
+      this.selectedLanguages = []
+    },
   }
 }
