@@ -8,9 +8,16 @@ CRITICAL TRANSLATION RULES:
 5. Provide the most natural and accurate translation
 6. Keep the same meaning and tone as the original
 7. If translating to Russian (русский), use ONLY Cyrillic characters
-8. If translating to Chinese, use ONLY Chinese characters
-9. If translating to Arabic (العربية), use ONLY Arabic script characters (ا-ي) - NO Chinese, English, or other scripts
-10. Complete the translation in pure {{lang}} only
+8. If translating to Chinese, use ONLY Chinese characters (汉字)
+9. If translating to Japanese, use ONLY Japanese characters (ひらがな, カタカナ, 漢字)
+10. If translating to Korean (한국어), use ONLY Korean Hangul characters (한글) - NEVER use Japanese hiragana (ひ), katakana (カ), or Chinese characters
+11. If translating to Arabic, use ONLY Arabic script characters (ا-ي) - NO Chinese, English, or other scripts
+12. Complete the translation in pure {{lang}} only
+
+IMPORTANT KOREAN RULE: 
+- Korean text must ONLY use Hangul characters like: 안녕하세요, 내일 만나요, 감사합니다
+- NEVER use Japanese characters like: ひらがな, カタカナ, or mixed Japanese text
+- Korean example: "안녕하세요" (correct) vs "こんにちは" (wrong - this is Japanese)
 
 Target language: {{lang}}
 Text to translate:

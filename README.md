@@ -73,10 +73,29 @@ npm run dev
 1. Start the app and click **"⚙️ Settings"**
 2. Enter Ollama server URL:
    - Local: `http://localhost:11434`
-   - Remote: `https://your-domain.com:11434`
+   - Remote: `http://your-ip:11434` or `https://your-domain.com:11434`
 3. Test connection, select model, and save
 
-## 🏗️ System Architecture
+#### Configuring Ollama for External Access
+
+By default, Ollama only accepts connections from localhost. To allow external connections via systemd:
+
+```bash
+# Create systemd override directory
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+
+# Create override configuration
+sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null <<EOF
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+EOF
+
+# Reload and restart service
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+## ️ System Architecture
 
 ### TTS Engine Strategy
 

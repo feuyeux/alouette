@@ -53,7 +53,10 @@ pub async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &s
     let prompt_path = Path::new(&manifest_dir).join("system_prompt.txt");
     let prompt_template = fs::read_to_string(&prompt_path)
         .map_err(|e| format!("Failed to read system prompt file: {} (path: {:?})", e, prompt_path))?;
-    let system_prompt = prompt_template.replace("{{lang}}", target_lang);
+    
+    // Use explicit language specification to avoid confusion between similar languages
+    let explicit_lang = get_explicit_language_spec(target_lang);
+    let system_prompt = prompt_template.replace("{{lang}}", &explicit_lang);
 
     let api_url = format!("{}/api/generate", ollama_url.trim_end_matches('/'));
     let request_body = serde_json::json!({
@@ -199,6 +202,13 @@ fn clean_translation_result(raw_text: &str, target_lang: &str) -> String {
             .collect();
     }
     
+    // If it's Korean, ensure only Hangul characters, punctuation and spaces are included
+    if target_lang.to_lowercase().contains("korean") || target_lang.to_lowercase().contains("한국어") {
+        cleaned = cleaned.chars()
+            .filter(|c| c.is_whitespace() || is_hangul_or_punct(*c))
+            .collect();
+    }
+    
     // If it's Arabic, ensure only Arabic characters, punctuation and spaces are included
     if target_lang.to_lowercase().contains("arabic") || target_lang.to_lowercase().contains("العربية") {
         cleaned = cleaned.chars()
@@ -233,4 +243,35 @@ fn is_arabic_or_punct(c: char) -> bool {
     // Common punctuation marks and numbers
     matches!(c, '.' | ',' | '!' | '?' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}' | '"' | '\'' | '«' | '»' | '—' | '–' | '-') ||
     c.is_ascii_digit()  // Allow numbers in Arabic text
+}
+
+/**
+ * Check if character is Hangul (Korean) or common punctuation
+ */
+fn is_hangul_or_punct(c: char) -> bool {
+    // Korean Hangul character ranges
+    ('\u{AC00}'..='\u{D7AF}').contains(&c) ||  // Hangul Syllables
+    ('\u{1100}'..='\u{11FF}').contains(&c) ||  // Hangul Jamo
+    ('\u{3130}'..='\u{318F}').contains(&c) ||  // Hangul Compatibility Jamo
+    ('\u{A960}'..='\u{A97F}').contains(&c) ||  // Hangul Jamo Extended-A
+    ('\u{D7B0}'..='\u{D7FF}').contains(&c) ||  // Hangul Jamo Extended-B
+    // Common punctuation marks
+    matches!(c, '.' | ',' | '!' | '?' | ';' | ':' | '(' | ')' | '[' | ']' | '{' | '}' | '"' | '\'' | '«' | '»' | '—' | '–' | '-')
+}
+
+/**
+ * Map language names to more explicit specifications to avoid confusion
+ * Especially important for distinguishing Korean from Japanese
+ */
+fn get_explicit_language_spec(language: &str) -> String {
+    match language {
+        "Korean" => "Korean (한국어) - USE ONLY HANGUL CHARACTERS, NOT Japanese hiragana/katakana".to_string(),
+        "Japanese" => "Japanese (日本語, Hiragana/Katakana/Kanji)".to_string(),
+        "Chinese" => "Chinese (中文, Simplified Chinese characters)".to_string(),
+        "Russian" => "Russian (русский язык, Cyrillic script)".to_string(),
+        "Arabic" => "Arabic (العربية, Arabic script)".to_string(),
+        "Greek" => "Greek (ελληνικά, Greek script)".to_string(),
+        "Hindi" => "Hindi (हिन्दी, Devanagari script)".to_string(),
+        _ => language.to_string(),
+    }
 }
