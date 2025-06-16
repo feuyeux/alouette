@@ -36,3 +36,15 @@ once_cell = "1.21.3"
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+# Android specific configurations
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+# Android link configuration  
+[profile.release]
+strip = false
+lto = false
+
+[profile.dev]
+strip = false

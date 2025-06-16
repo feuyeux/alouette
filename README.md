@@ -168,3 +168,61 @@ npm run build:ios        # iOS app (macOS only)
         framespacing="0" 
         allowfullscreen="true">
 </iframe>
+
+
+## Android Build & Deployment Guide
+
+### Prerequisites
+
+Ensure your project directory contains a complete Android SDK setup:
+
+```bash
+# Set Android environment variables
+export ANDROID_HOME=/home/hanl5/coding/alouette/android-sdk
+export ANDROID_SDK_ROOT=$ANDROID_HOME
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin
+```
+
+### Launch Android Emulator
+
+```bash
+# Start emulator in background
+cd /home/hanl5/coding/alouette
+android-sdk/emulator/emulator -avd test_avd -no-snapshot-save &
+
+# Wait for emulator to fully boot, then check device connection
+adb devices
+```
+
+### Build Debug APK
+
+```bash
+# Build debug version (auto-signed, ready to install)
+cd /home/hanl5/coding/alouette
+export ANDROID_HOME=/home/hanl5/coding/alouette/android-sdk
+export ANDROID_SDK_ROOT=$ANDROID_HOME
+export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin
+npm run build:android -- --debug
+```
+
+**Note**: Debug builds are automatically signed and suitable for development/testing. Release builds require manual signing before installation.
+
+### Deploy & Verify
+
+```bash
+# 1. Confirm emulator is connected
+adb devices
+
+# 2. Install APK to emulator
+adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
+# 3. Launch the application
+adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
+
+# 4. Verify app process is running
+adb shell ps | grep alouette
+
+# 5. Check app logs for troubleshooting (optional)
+adb logcat | grep -i "alouette\|rust\|tauri"
+```

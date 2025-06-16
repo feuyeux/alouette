@@ -15,7 +15,7 @@ dist-ssr
 
 # Tauri
 src-tauri/target/
-src-tauri/gen/
+
 
 # Bundle outputs
 src-tauri/bundle/
@@ -81,3 +81,4 @@ android-sdk/
 gradle-8.14.2/
 src-tauri/Cargo.lock
 *log
+alouette-kotlin/composeApp/.gradle/

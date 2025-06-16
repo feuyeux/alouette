@@ -1,0 +1,31 @@
+[target.aarch64-linux-android]
+rustflags = [
+    "-C", "link-arg=-lc++_shared",
+    "-C", "link-arg=-lc++abi",
+    "-C", "link-arg=-llog",
+    "-C", "link-arg=-landroid"
+]
+
+[target.armv7-linux-androideabi]
+rustflags = [
+    "-C", "link-arg=-lc++_shared",
+    "-C", "link-arg=-lc++abi",
+    "-C", "link-arg=-llog",
+    "-C", "link-arg=-landroid"
+]
+
+[target.i686-linux-android]
+rustflags = [
+    "-C", "link-arg=-lc++_shared",
+    "-C", "link-arg=-lc++abi",
+    "-C", "link-arg=-llog",
+    "-C", "link-arg=-landroid"
+]
+
+[target.x86_64-linux-android]
+rustflags = [
+    "-C", "link-arg=-lc++_shared",
+    "-C", "link-arg=-lc++abi",
+    "-C", "link-arg=-llog",
+    "-C", "link-arg=-landroid"
+]

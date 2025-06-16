@@ -1,0 +1,33 @@
+pluginManagement {
+    repositories {
+        // 优先使用华为云镜像
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+        maven { url 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        // 备用官方仓库
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+
+dependencyResolutionManagement {
+    repositories {
+        // 优先使用华为云镜像
+        maven { url 'https://repo.huaweicloud.com/repository/maven/' }
+        maven { url 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        // 备用官方仓库
+        google()
+        mavenCentral()
+    }
+}
+
+include ':app'
+
+apply from: 'tauri.settings.gradle'
