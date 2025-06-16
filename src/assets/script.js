@@ -262,7 +262,16 @@ export default {
 
       } catch (error) {
         console.error('Translation failed:', error)
-        alert('Translation failed: ' + error.message)
+        // Handle different types of errors more gracefully
+        let errorMessage = 'Unknown error occurred'
+        if (error && error.message) {
+          errorMessage = error.message
+        } else if (typeof error === 'string') {
+          errorMessage = error
+        } else if (error) {
+          errorMessage = error.toString()
+        }
+        alert('Translation failed: ' + errorMessage)
       } finally {
         this.isTranslating = false
       }

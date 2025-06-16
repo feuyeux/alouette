@@ -84,6 +84,7 @@ pub async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &s
     match response {
         Ok(resp) if resp.status().is_success() => {
             let response_text = resp.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
+            println!("Raw response: {}", response_text);
             let response_json: serde_json::Value = serde_json::from_str(&response_text)
                 .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
             let raw_translation = response_json["response"].as_str().unwrap_or("").trim();
@@ -92,17 +93,22 @@ pub async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &s
                 // Clean translation result, remove possible prefixes, suffixes and explanatory text
                 let translation = clean_translation_result(raw_translation, target_lang);
                 println!("Translation result: '{}'", translation);
-                return Ok(translation);
+                Ok(translation)
+            } else {
+                Err(format!("Empty translation response for text: '{}' to language: '{}'", text, target_lang))
             }
         },
         Ok(resp) => {
-            println!("HTTP error: {}", resp.status());
+            let status = resp.status();
+            let response_text = resp.text().await.unwrap_or_else(|_| "Failed to read error response".to_string());
+            println!("HTTP error: {} - {}", status, response_text);
+            Err(format!("HTTP error {}: {}", status, response_text))
         },
         Err(e) => {
             println!("Request failed: {}", e);
+            Err(format!("Network error: {}", e))
         }
     }
-    Err(format!("Translation failed for text: '{}' to language: '{}'. Please check Ollama server and model. Try running curl -X POST {}/api/generate ... to debug.", text, target_lang, ollama_url))
 }
 
 /**
