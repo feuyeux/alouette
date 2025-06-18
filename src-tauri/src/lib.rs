@@ -41,36 +41,74 @@ struct TranslationResponse {
  */
 #[tauri::command]
 async fn translate_text(request: TranslationRequest) -> Result<TranslationResponse, String> {
-    println!("Starting translation process for text: '{}'", request.text);
-    println!("Target languages: {:?}", request.target_languages);
-    println!("Using {} provider: {}", request.provider, request.server_url);
-    println!("Using model: {}", request.model_name);
+    println!("Android Debug - Starting translation process");
+    println!("Android Debug - Text: '{}'", request.text);
+    println!("Android Debug - Target languages: {:?}", request.target_languages);
+    println!("Android Debug - Provider: {}", request.provider);
+    println!("Android Debug - Server URL: {}", request.server_url);
+    println!("Android Debug - Model: {}", request.model_name);
+    
+    // Validate input parameters
+    if request.text.trim().is_empty() {
+        let error_msg = "Input text is empty".to_string();
+        println!("Android Debug - Validation failed: {}", error_msg);
+        return Err(error_msg);
+    }
+    
+    if request.target_languages.is_empty() {
+        let error_msg = "No target languages specified".to_string();
+        println!("Android Debug - Validation failed: {}", error_msg);
+        return Err(error_msg);
+    }
+    
+    if request.server_url.trim().is_empty() {
+        let error_msg = "Server URL is empty".to_string();
+        println!("Android Debug - Validation failed: {}", error_msg);
+        return Err(error_msg);
+    }
+    
+    if request.model_name.trim().is_empty() {
+        let error_msg = "Model name is empty".to_string();
+        println!("Android Debug - Validation failed: {}", error_msg);
+        return Err(error_msg);
+    }
     
     let mut translations = HashMap::new();
     
     // Process each target language sequentially
-    for lang in &request.target_languages {
-        println!("Translating to {}", lang);
+    for (index, lang) in request.target_languages.iter().enumerate() {
+        println!("Android Debug - Translating to {} ({}/{})...", lang, index + 1, request.target_languages.len());
         
         let translation_result = match request.provider.as_str() {
-            "ollama" => call_ollama_translate(&request.text, lang, &request.server_url, &request.model_name).await,
-            "lmstudio" => call_lmstudio_translate(&request.text, lang, &request.server_url, &request.model_name, request.api_key.as_deref()).await,
-            _ => Err(format!("Unsupported provider: {}", request.provider))
+            "ollama" => {
+                println!("Android Debug - Calling Ollama for language: {}", lang);
+                call_ollama_translate(&request.text, lang, &request.server_url, &request.model_name).await
+            },
+            "lmstudio" => {
+                println!("Android Debug - Calling LM Studio for language: {}", lang);
+                call_lmstudio_translate(&request.text, lang, &request.server_url, &request.model_name, request.api_key.as_deref()).await
+            },
+            _ => {
+                let error_msg = format!("Unsupported provider: {}", request.provider);
+                println!("Android Debug - {}", error_msg);
+                Err(error_msg)
+            }
         };
         
         match translation_result {
             Ok(translation) => {
-                println!("Successfully translated to {}: '{}'", lang, translation);
+                println!("Android Debug - Successfully translated to {}: '{}'", lang, translation);
                 translations.insert(lang.clone(), translation);
             }
             Err(e) => {
-                println!("Failed to translate to {}: {}", lang, e);
-                return Err(format!("Translation failed for {}: {}", lang, e));
+                let error_msg = format!("Translation failed for language '{}': {}", lang, e);
+                println!("Android Debug - {}", error_msg);
+                return Err(error_msg);
             }
         }
     }
     
-    println!("Translation process completed successfully");
+    println!("Android Debug - Translation process completed successfully with {} results", translations.len());
     Ok(TranslationResponse { translations })
 }
 

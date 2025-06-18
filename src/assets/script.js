@@ -84,6 +84,18 @@ export default {
   mounted() {
     console.log('Alouette application initializing...')
 
+    // Detect if running on Android
+    const isAndroid = navigator.userAgent.toLowerCase().includes('android') || 
+                     window.location.hostname.includes('tauri.localhost');
+    
+    if (isAndroid) {
+      console.log('🤖 Android environment detected')
+      // For Android, suggest using IP address instead of localhost
+      if (!localStorage.getItem('serverUrl') || localStorage.getItem('serverUrl').includes('localhost')) {
+        console.log('💡 Android Tip: Consider using device IP address instead of localhost for Ollama connection')
+      }
+    }
+
     // Migrate legacy Ollama configuration
     if (!localStorage.getItem('llmProvider') && localStorage.getItem('ollamaUrl')) {
       console.log('Migrating legacy Ollama configuration...')
@@ -92,8 +104,14 @@ export default {
       localStorage.setItem('llmProvider', 'ollama')
       localStorage.setItem('serverUrl', this.ollamaUrl)
     } else if (!this.serverUrl) {
-      // Set default URLs based on provider
-      this.serverUrl = this.llmProvider === 'ollama' ? 'http://localhost:11434' : 'http://localhost:1234'
+      // Set default URLs based on provider and platform
+      if (isAndroid) {
+        // For Android, default to a common local network IP
+        this.serverUrl = this.llmProvider === 'ollama' ? 'http://192.168.1.100:11434' : 'http://192.168.1.100:1234'
+        console.log('🤖 Android: Set default server URL to local network IP')
+      } else {
+        this.serverUrl = this.llmProvider === 'ollama' ? 'http://localhost:11434' : 'http://localhost:1234'
+      }
     }
 
     // Check Tauri environment
@@ -107,6 +125,7 @@ export default {
     }
 
     console.log('Configuration loaded:', {
+      platform: isAndroid ? 'Android' : 'Desktop',
       llmProvider: this.llmProvider,
       serverUrl: this.serverUrl,
       selectedModel: this.selectedModel,
@@ -261,17 +280,70 @@ export default {
         // this.selectedLanguages = []
 
       } catch (error) {
-        console.error('Translation failed:', error)
-        // Handle different types of errors more gracefully
+        console.error('Android Debug - Translation failed:', error)
+        console.error('Android Debug - Error type:', typeof error)
+        console.error('Android Debug - Error constructor:', error?.constructor?.name)
+        console.error('Android Debug - Error details:', JSON.stringify(error, null, 2))
+        
+        // Enhanced error handling with more detailed information for Android debugging
         let errorMessage = 'Unknown error occurred'
-        if (error && error.message) {
-          errorMessage = error.message
+        
+        // Handle Tauri command errors specifically
+        if (error && typeof error === 'object') {
+          // Check if it's a Tauri error object
+          if (error.message) {
+            errorMessage = error.message
+            console.log('Android Debug - Using error.message:', errorMessage)
+          } else if (error.error) {
+            errorMessage = error.error
+            console.log('Android Debug - Using error.error:', errorMessage)
+          } else if (error.toString && error.toString() !== '[object Object]') {
+            errorMessage = error.toString()
+            console.log('Android Debug - Using error.toString():', errorMessage)
+          } else {
+            // Try to extract any useful information from the error object
+            try {
+              const serialized = JSON.stringify(error)
+              if (serialized !== '{}') {
+                errorMessage = serialized
+                console.log('Android Debug - Using JSON.stringify:', errorMessage)
+              }
+            } catch (e) {
+              console.error('Android Debug - Failed to serialize error:', e)
+              errorMessage = 'Error occurred but could not be serialized'
+            }
+          }
         } else if (typeof error === 'string') {
           errorMessage = error
-        } else if (error) {
-          errorMessage = error.toString()
+          console.log('Android Debug - Using string error:', errorMessage)
         }
-        alert('Translation failed: ' + errorMessage)
+        
+        // Clean up the error message for better display
+        if (errorMessage.includes('Translation failed for')) {
+          // Extract the inner error message after the language prefix
+          const match = errorMessage.match(/Translation failed for [^:]+: (.+)/)
+          if (match && match[1]) {
+            errorMessage = match[1]
+          }
+        }
+        
+        // Provide specific guidance based on error content
+        let guidance = ''
+        if (errorMessage.includes('Network request failed') || errorMessage.includes('Failed to fetch')) {
+          guidance = '\n\n💡 Android Tip: Check if Ollama server is accessible from your device. Try using the device IP address instead of localhost.'
+        } else if (errorMessage.includes('HTTP error 404')) {
+          guidance = '\n\n💡 Android Tip: Verify your server URL and ensure Ollama API endpoints are correct.'
+        } else if (errorMessage.includes('Empty translation response') || errorMessage.includes('Failed to parse JSON')) {
+          guidance = '\n\n💡 Android Tip: The model may be overloaded or returning invalid responses. Try a different model or restart Ollama.'
+        } else if (errorMessage.includes('undefined') || errorMessage === 'Unknown error occurred') {
+          guidance = '\n\n💡 Android Tip: Check Android logs for more details. Ensure all configuration is correct.'
+        } else if (errorMessage.includes('Input text is empty') || errorMessage.includes('No target languages')) {
+          guidance = '\n\n💡 Android Tip: Please enter text and select target languages before translating.'
+        }
+        
+        const finalMessage = `Translation failed: ${errorMessage}${guidance}`
+        console.error('Android Debug - Final error message:', finalMessage)
+        alert(finalMessage)
       } finally {
         this.isTranslating = false
       }

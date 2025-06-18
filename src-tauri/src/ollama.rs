@@ -41,18 +41,22 @@ pub async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &s
     use once_cell::sync::Lazy;
     static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
         reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
+            .timeout(std::time::Duration::from_secs(60)) // Increased timeout for Android
+            .connect_timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("Failed to create HTTP client")
     });
     let client = &*HTTP_CLIENT;
 
+    println!("Android Debug - Starting Ollama translation");
+    println!("Android Debug - Text: '{}'", text);
+    println!("Android Debug - Target language: '{}'", target_lang);
+    println!("Android Debug - Server URL: '{}'", ollama_url);
+    println!("Android Debug - Model: '{}'", model_name);
+
     // Load system prompt template
-    // Use CARGO_MANIFEST_DIR as global resource directory
-    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let prompt_path = Path::new(&manifest_dir).join("system_prompt.txt");
-    let prompt_template = fs::read_to_string(&prompt_path)
-        .map_err(|e| format!("Failed to read system prompt file: {} (path: {:?})", e, prompt_path))?;
+    // For Android compatibility, use embedded prompt instead of file system
+    let prompt_template = get_embedded_system_prompt();
     
     // Use explicit language specification to avoid confusion between similar languages
     let explicit_lang = get_explicit_language_spec(target_lang);
@@ -75,7 +79,10 @@ pub async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &s
             "repeat_last_n": 64
         }
     });
-    println!("Sending request to: {}", api_url);
+    
+    println!("Android Debug - Sending request to: {}", api_url);
+    println!("Android Debug - Request body size: {} bytes", serde_json::to_string(&request_body).unwrap_or_default().len());
+    
     let response = client
         .post(&api_url)
         .json(&request_body)
@@ -83,30 +90,79 @@ pub async fn call_ollama_translate(text: &str, target_lang: &str, ollama_url: &s
         .await;
     match response {
         Ok(resp) if resp.status().is_success() => {
-            let response_text = resp.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
-            println!("Raw response: {}", response_text);
-            let response_json: serde_json::Value = serde_json::from_str(&response_text)
-                .map_err(|e| format!("Failed to parse response JSON: {}", e))?;
-            let raw_translation = response_json["response"].as_str().unwrap_or("").trim();
+            let response_text = match resp.text().await {
+                Ok(text) => text,
+                Err(e) => {
+                    let error_msg = format!("Failed to read response body: {}", e);
+                    println!("Android Debug - {}", error_msg);
+                    return Err(error_msg);
+                }
+            };
             
-            if !raw_translation.is_empty() {
-                // Clean translation result, remove possible prefixes, suffixes and explanatory text
-                let translation = clean_translation_result(raw_translation, target_lang);
-                println!("Translation result: '{}'", translation);
-                Ok(translation)
-            } else {
-                Err(format!("Empty translation response for text: '{}' to language: '{}'", text, target_lang))
+            println!("Android Debug - Raw response length: {}", response_text.len());
+            println!("Android Debug - Raw response (first 500 chars): {}", 
+                if response_text.len() > 500 { &response_text[..500] } else { &response_text });
+            
+            if response_text.trim().is_empty() {
+                let error_msg = format!("Received empty response from Ollama server for text: '{}'", text);
+                println!("Android Debug - {}", error_msg);
+                return Err(error_msg);
             }
+            
+            let response_json: serde_json::Value = match serde_json::from_str(&response_text) {
+                Ok(json) => json,
+                Err(e) => {
+                    let error_msg = format!("Failed to parse JSON response: {}. Response text: {}", e, response_text);
+                    println!("Android Debug - {}", error_msg);
+                    return Err(error_msg);
+                }
+            };
+            
+            // More robust response parsing
+            let raw_translation = match response_json.get("response") {
+                Some(serde_json::Value::String(s)) => s.trim(),
+                Some(other) => {
+                    let error_msg = format!("Response field is not a string, got: {:?}", other);
+                    println!("Android Debug - {}", error_msg);
+                    return Err(error_msg);
+                },
+                None => {
+                    let error_msg = format!("No 'response' field found in JSON. Available fields: {:?}", 
+                        response_json.as_object().map(|o| o.keys().collect::<Vec<_>>()).unwrap_or_default());
+                    println!("Android Debug - {}", error_msg);
+                    return Err(error_msg);
+                }
+            };
+            
+            if raw_translation.is_empty() {
+                let error_msg = format!("Empty translation response for text: '{}' to language: '{}'", text, target_lang);
+                println!("Android Debug - {}", error_msg);
+                return Err(error_msg);
+            }
+            
+            // Clean translation result, remove possible prefixes, suffixes and explanatory text
+            let translation = clean_translation_result(raw_translation, target_lang);
+            println!("Android Debug - Final translation result: '{}'", translation);
+            
+            if translation.trim().is_empty() {
+                let error_msg = format!("Translation result is empty after cleaning for text: '{}' to language: '{}'", text, target_lang);
+                println!("Android Debug - {}", error_msg);
+                return Err(error_msg);
+            }
+            
+            Ok(translation)
         },
         Ok(resp) => {
             let status = resp.status();
             let response_text = resp.text().await.unwrap_or_else(|_| "Failed to read error response".to_string());
-            println!("HTTP error: {} - {}", status, response_text);
-            Err(format!("HTTP error {}: {}", status, response_text))
+            let error_msg = format!("HTTP error {}: {}", status, response_text);
+            println!("Android Debug - {}", error_msg);
+            Err(error_msg)
         },
         Err(e) => {
-            println!("Request failed: {}", e);
-            Err(format!("Network error: {}", e))
+            let error_msg = format!("Network request failed: {}", e);
+            println!("Android Debug - {}", error_msg);
+            Err(error_msg)
         }
     }
 }
@@ -280,4 +336,36 @@ fn get_explicit_language_spec(language: &str) -> String {
         "Hindi" => "Hindi (हिन्दी, Devanagari script)".to_string(),
         _ => language.to_string(),
     }
+}
+
+/**
+ * Get embedded system prompt for Android compatibility
+ * Avoids file system access issues on Android platform
+ */
+fn get_embedded_system_prompt() -> String {
+    r#"You are a professional translation engine. Your ONLY task is to provide a pure, accurate translation.
+
+CRITICAL TRANSLATION RULES:
+1. Output ONLY the translated text in {{lang}} language
+2. Use ONLY {{lang}} characters and words - ABSOLUTELY NO mixing with other languages
+3. NO explanations, notes, or commentary of any kind
+4. NO repetition of original text in any language
+5. Provide the most natural and accurate translation
+6. Keep the same meaning and tone as the original
+7. If translating to Russian (русский), use ONLY Cyrillic characters
+8. If translating to Chinese, use ONLY Chinese characters (汉字)
+9. If translating to Japanese, use ONLY Japanese characters (ひらがな, カタカナ, 漢字)
+10. If translating to Korean (한국어), use ONLY Korean Hangul characters (한글) - NEVER use Japanese hiragana (ひ), katakana (カ), or Chinese characters
+11. If translating to Arabic, use ONLY Arabic script characters (ا-ي) - NO Chinese, English, or other scripts
+12. Complete the translation in pure {{lang}} only
+
+IMPORTANT KOREAN RULE: 
+- Korean text must ONLY use Hangul characters like: 안녕하세요, 내일 만나요, 감사합니다
+- NEVER use Japanese characters like: ひらがな, カタカナ, or mixed Japanese text
+- Korean example: "안녕하세요" (correct) vs "こんにちは" (wrong - this is Japanese)
+
+Target language: {{lang}}
+Text to translate:
+
+"#.to_string()
 }
