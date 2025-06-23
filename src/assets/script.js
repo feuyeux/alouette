@@ -378,10 +378,65 @@ export default {
 
       } catch (error) {
         console.error('TTS playback failed:', error)
-        this.playingText = null
-
-        // Display specific error message
+        
+        // Check if this is an Android TTS command
         const errorMsg = error.message || error.toString() || 'Unknown error'
+        if (errorMsg.startsWith('ANDROID_TTS_COMMAND:')) {
+          try {
+            const jsonCommand = errorMsg.substring('ANDROID_TTS_COMMAND:'.length)
+            const ttsCommand = JSON.parse(jsonCommand)
+            
+            console.log('Processing Android TTS command:', ttsCommand)
+            
+            // Use WebView's speechSynthesis API for Android
+            if ('speechSynthesis' in window) {
+              const utterance = new SpeechSynthesisUtterance(ttsCommand.text)
+              utterance.lang = ttsCommand.locale || ttsCommand.language || lang
+              utterance.rate = this.ttsSettings.rate || 0.8
+              utterance.volume = this.ttsSettings.volume || 0.9
+              
+              // Find matching voice
+              const voices = speechSynthesis.getVoices()
+              const matchingVoice = voices.find(voice => 
+                voice.lang === ttsCommand.locale || 
+                voice.lang.startsWith(ttsCommand.language) ||
+                voice.name === ttsCommand.voice
+              )
+              
+              if (matchingVoice) {
+                utterance.voice = matchingVoice
+                console.log(`Using voice: ${matchingVoice.name} (${matchingVoice.lang})`)
+              }
+              
+              // Play the speech
+              speechSynthesis.speak(utterance)
+              
+              // Wait for speech to complete
+              await new Promise((resolve, reject) => {
+                utterance.onend = () => {
+                  console.log('Android TTS playback completed')
+                  resolve()
+                }
+                utterance.onerror = (event) => {
+                  console.error('Android TTS playback error:', event.error)
+                  reject(new Error(`Android TTS error: ${event.error}`))
+                }
+              })
+              
+              this.playingText = null
+              return
+            } else {
+              throw new Error('speechSynthesis not available in this WebView')
+            }
+          } catch (parseError) {
+            console.error('Failed to parse Android TTS command:', parseError)
+            throw new Error(`Android TTS command parsing failed: ${parseError.message}`)
+          }
+        }
+        
+        this.playingText = null
+        
+        // Display specific error message
         alert(`TTS playback failed: ${errorMsg}`)
       }
     },

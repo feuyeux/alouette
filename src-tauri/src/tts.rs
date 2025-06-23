@@ -8,6 +8,9 @@ use rodio::{Decoder, OutputStream, Sink};
 use std::io::Cursor;
 use sha2::{Digest, Sha256};
 
+#[cfg(target_os = "android")]
+use crate::android_tts::AndroidTTSEngine;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VoiceInfo {
     pub name: String,
@@ -34,6 +37,8 @@ impl VoiceInfo {
 pub struct TTSEngine {
     voices: Vec<VoiceInfo>,
     cache_dir: PathBuf,
+    #[cfg(target_os = "android")]
+    android_tts: AndroidTTSEngine,
 }
 
 impl TTSEngine {
@@ -42,6 +47,8 @@ impl TTSEngine {
         Self {
             voices: Self::init_voices(),
             cache_dir,
+            #[cfg(target_os = "android")]
+            android_tts: AndroidTTSEngine::new(),
         }
     }
 
@@ -326,6 +333,44 @@ impl TTSEngine {
     }
 
     pub async fn synthesize_speech(&self, text: &str, language: &str) -> Result<Vec<u8>, String> {
+        // On Android, use Android TTS instead of external commands
+        #[cfg(target_os = "android")]
+        {
+            println!("Android TTS Debug - Using Android TTS engine");
+            match self.android_tts.synthesize_speech(text, language).await {
+                Ok(tts_command) => {
+                    println!("Android TTS Debug - Generated command: {}", tts_command);
+                    // Return the TTS command as JSON bytes for the frontend to handle
+                    return Ok(tts_command.into_bytes());
+                },
+                Err(e) => {
+                    println!("Android TTS Debug - Error: {}", e);
+                    return Err(format!("Android TTS failed: {}", e));
+                }
+            }
+        }
+
+        // Desktop platform TTS implementation
+        #[cfg(not(target_os = "android"))]
+        {
+            // Safe string truncation that respects UTF-8 character boundaries
+            let display_text = Self::safe_truncate(text, 50);
+            
+            println!("TTS synthesis request: language={}, text_length={}, content='{}'", 
+                     language, text.chars().count(), display_text);
+
+            // Basic text validation
+            if text.trim().is_empty() {
+                return Err("Cannot synthesize empty text".to_string());
+            }
+
+            // Continue with existing desktop TTS logic...
+            self.synthesize_speech_desktop(text, language).await
+        }
+    }
+
+    #[cfg(not(target_os = "android"))]
+    async fn synthesize_speech_desktop(&self, text: &str, language: &str) -> Result<Vec<u8>, String> {
         // Safe string truncation that respects UTF-8 character boundaries
         let display_text = Self::safe_truncate(text, 50);
         
@@ -733,8 +778,31 @@ impl TTSEngine {
 
     pub async fn play_tts(&self, text: &str, language: &str) -> Result<(), String> {
         let audio_data = self.synthesize_speech(text, language).await?;
-        self.play_audio_from_bytes(&audio_data).await?;
-        println!("TTS playback completed");
+        
+        #[cfg(target_os = "android")]
+        {
+            // On Android, synthesize_speech returns a JSON command string as bytes
+            // We need to parse it and return it to the frontend for handling
+            if let Ok(json_str) = String::from_utf8(audio_data.clone()) {
+                if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&json_str) {
+                    if json_value.get("type").and_then(|v| v.as_str()) == Some("android_tts_command") {
+                        println!("Android TTS command generated: {}", json_str);
+                        // Return the JSON command to frontend via Tauri event
+                        return Err(format!("ANDROID_TTS_COMMAND:{}", json_str));
+                    }
+                }
+            }
+            // If not a valid JSON command, treat as error
+            return Err("Invalid Android TTS command format".to_string());
+        }
+        
+        #[cfg(not(target_os = "android"))]
+        {
+            // On other platforms, treat as audio data
+            self.play_audio_from_bytes(&audio_data).await?;
+            println!("TTS playback completed");
+        }
+        
         Ok(())
     }
 }

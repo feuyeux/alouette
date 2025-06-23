@@ -1,9 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+mod common;
 mod tts;
 mod ollama;
 mod lm_studio;
+#[cfg(target_os = "android")]
+mod android_tts;
 
 use tts::TTSEngine;
 use ollama::{call_ollama_translate, connect_ollama_internal};
