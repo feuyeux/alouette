@@ -296,55 +296,9 @@
 
     <!-- Translation Input Section -->
     <div class="translation-section">
-      <h3>🌐 Enter Text to Translate</h3>
-      <div class="input-group">
-        <textarea
-          v-model="inputText"
-          placeholder="Enter text to translate..."
-          rows="3"
-        ></textarea>
-      </div>
-
-      <!-- Language Selection -->
-      <div class="language-container">
-        <h4>📋 Select Target Languages</h4>
-
-        <!-- Language List -->
-        <div class="language-grid">
-          <label
-            v-for="language in availableLanguages"
-            :key="language"
-            class="checkbox-label"
-            :class="{ 'select-all-option': language === 'Select All' }"
-          >
-            <input
-              type="checkbox"
-              :value="language"
-              v-model="selectedLanguages"
-              :checked="
-                language === 'Select All'
-                  ? isAllSelected
-                  : selectedLanguages.includes(language)
-              "
-              @change="
-                language === 'Select All' ? toggleSelectAll($event) : null
-              "
-            />
-            <span v-if="language === 'Select All'">
-              Select All ({{
-                selectedLanguages.filter((lang) => lang !== "Select All")
-                  .length
-              }}/{{
-                availableLanguages.filter((lang) => lang !== "Select All")
-                  .length
-              }})
-            </span>
-            <span v-else>{{ language }}</span>
-          </label>
-        </div>
-      </div>
-
-      <div class="translate-button-container">
+      <!-- Title and Buttons Row -->
+      <div class="input-header">
+        <h3>🌐 Enter Text to Translate</h3>
         <div class="btn-group">
           <button
             @click="translateText"
@@ -353,82 +307,145 @@
               selectedLanguages.length === 0 ||
               isTranslating
             "
-            class="btn-primary btn-large"
+            class="btn-primary btn-medium"
           >
             {{ isTranslating ? "🔄 Translating..." : "🚀 Start Translation" }}
           </button>
           <button
             @click="clearInput"
             :disabled="!inputText.trim() && selectedLanguages.length === 0"
-            class="btn-secondary btn-large"
+            class="btn-secondary btn-medium"
           >
             🗑️ Clear
           </button>
         </div>
       </div>
+      
+      <!-- Input Box Row -->
+      <div class="input-group">
+        <textarea
+          v-model="inputText"
+          placeholder="Enter text to translate..."
+          rows="3"
+        ></textarea>
+      </div>
     </div>
 
-    <!-- Translation Results Section -->
-    <div v-if="currentTranslation" class="results-section">
-      <div class="results-header">
-        <h3>📚 Translation Results</h3>
-        <div class="control-buttons btn-group-tight">
-          <button
-            @click="playAll"
-            :disabled="isPlayingAll || playingText"
-            class="btn-primary btn-medium"
-          >
-            {{ isPlayingAll ? "⏸️ Pause Playback" : "🎵 Play All" }}
-          </button>
-          <button
-            @click="stopPlayAll"
-            :disabled="!playingText && !isPlayingAll"
-            class="btn-danger btn-medium"
-          >
-            🛑 Stop
-          </button>
+    <!-- Main Content Area: Language Selection + Results -->
+    <div class="main-content-grid">
+      <!-- Language Selection Panel -->
+      <div class="language-panel">
+        <div class="language-container">
+          <h4>📋 Select Languages</h4>
+
+          <!-- Language List -->
+          <div class="language-grid">
+            <label
+              v-for="language in availableLanguages"
+              :key="language"
+              class="checkbox-label"
+              :class="{ 'select-all-option': language === 'All' }"
+            >
+              <input
+                type="checkbox"
+                :value="language"
+                v-model="selectedLanguages"
+                :checked="
+                  language === 'All'
+                    ? isAllSelected
+                    : selectedLanguages.includes(language)
+                "
+                @change="
+                  language === 'All' ? toggleSelectAll($event) : null
+                "
+              />
+              <span v-if="language === 'All'">
+                All ({{
+                  selectedLanguages.filter((lang) => lang !== "All")
+                    .length
+                }}/{{
+                  availableLanguages.filter((lang) => lang !== "All")
+                    .length
+                }})
+              </span>
+              <span v-else>{{ language }}</span>
+            </label>
+          </div>
         </div>
       </div>
 
-      <!-- Original Text Display -->
-      <div class="original-text">
-        <span class="original-label">Original:</span>
-        <span class="original-content">{{ currentTranslation.original }}</span>
-      </div>
-
-      <!-- Translation Results List -->
-      <div class="translations">
-        <div
-          v-for="language in orderedLanguages"
-          :key="language"
-          class="translation-row"
-        >
-          <div class="language-name">{{ language }}</div>
-          <div class="translation-text" :class="getLanguageClass(language)">
-            {{ currentTranslation.translations[language] }}
+      <!-- Translation Results Panel -->
+      <div class="results-panel">
+        <div v-if="currentTranslation" class="results-section">
+          <div class="results-header">
+            <h3>📚 Translation Results</h3>
+            <div class="control-buttons btn-group-tight">
+              <button
+                @click="playAll"
+                :disabled="isPlayingAll || playingText"
+                class="btn-primary btn-medium"
+              >
+                {{ isPlayingAll ? "⏸️ Pause Playback" : "🎵 Play All" }}
+              </button>
+              <button
+                @click="stopPlayAll"
+                :disabled="!playingText && !isPlayingAll"
+                class="btn-danger btn-medium"
+              >
+                🛑 Stop
+              </button>
+            </div>
           </div>
-          <button
-            @click="
-              playTTS(currentTranslation.translations[language], language)
-            "
-            :disabled="
-              playingText === currentTranslation.translations[language]
-            "
-            :class="[
-              'btn-primary',
-              'btn-small',
-              {
-                'btn-playing':
-                  playingText === currentTranslation.translations[language],
-              },
-            ]"
-          >
-            {{
-              playingText === currentTranslation.translations[language]
-                ? "🔊"
-                : "▶️"
-            }}
-          </button>
+
+          <!-- Original Text Display -->
+          <div class="original-text">
+            <span class="original-label">Original:</span>
+            <span class="original-content">{{ currentTranslation.original }}</span>
+          </div>
+
+          <!-- Translation Results List -->
+          <div class="translations">
+            <div
+              v-for="language in orderedLanguages"
+              :key="language"
+              class="translation-row"
+            >
+              <div class="language-name">{{ language }}</div>
+              <div class="translation-text" :class="getLanguageClass(language)">
+                {{ currentTranslation.translations[language] }}
+              </div>
+              <button
+                @click="
+                  playTTS(currentTranslation.translations[language], language)
+                "
+                :disabled="
+                  playingText === currentTranslation.translations[language]
+                "
+                :class="[
+                  'btn-primary',
+                  'btn-small',
+                  {
+                    'btn-playing':
+                      playingText === currentTranslation.translations[language],
+                  },
+                ]"
+              >
+                {{
+                  playingText === currentTranslation.translations[language]
+                    ? "🔊"
+                    : "▶️"
+                }}
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Placeholder when no translation -->
+        <div v-else class="results-placeholder">
+          <div class="placeholder-content">
+            <h3>📚 Translation Results</h3>
+            <p>Select languages and click "Start Translation" to see results here.</p>
+          </div>
         </div>
       </div>
     </div>

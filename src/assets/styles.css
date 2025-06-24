@@ -35,91 +35,91 @@ button {
   overflow: hidden;
 }
 
-/* Button size variants */
+/* Button size variants - 压缩所有按钮高度 */
 .btn-large {
-  height: 48px;
-  padding: 0 32px;
-  font-size: 16px;
-  min-width: 160px;
-  border-radius: 12px;
-}
-
-.btn-medium {
-  height: 40px;
+  height: 36px;
   padding: 0 24px;
   font-size: 14px;
   min-width: 120px;
-  border-radius: 10px;
+  border-radius: 8px;
 }
 
-.btn-small {
+.btn-medium {
   height: 32px;
   padding: 0 16px;
   font-size: 13px;
   min-width: 90px;
-  border-radius: 8px;
-}
-
-.btn-mini {
-  height: 28px;
-  padding: 0 12px;
-  font-size: 12px;
-  min-width: 70px;
   border-radius: 6px;
 }
 
-/* Button color variants */
+.btn-small {
+  height: 26px;
+  padding: 0 12px;
+  font-size: 12px;
+  min-width: 70px;
+  border-radius: 5px;
+}
+
+.btn-mini {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  min-width: 50px;
+  border-radius: 4px;
+}
+
+/* Button color variants - 更舒适的配色方案 */
 .btn-primary {
-  background: linear-gradient(135deg, #58cc02 0%, #46a302 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  box-shadow: 0 4px 12px rgba(88, 204, 2, 0.25);
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.25);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #46a302 0%, #3b8a02 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(88, 204, 2, 0.35);
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.35);
 }
 
 .btn-primary:active:not(:disabled) {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(88, 204, 2, 0.3);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
 }
 
 .btn-secondary {
-  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
   color: white;
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.25);
+  box-shadow: 0 3px 10px rgba(116, 185, 255, 0.25);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2980b9 0%, #2471a3 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.35);
+  background: linear-gradient(135deg, #55a3ff 0%, #0770d1 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(116, 185, 255, 0.35);
 }
 
 .btn-warning {
-  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  background: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
   color: white;
-  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.25);
+  box-shadow: 0 3px 10px rgba(253, 203, 110, 0.25);
 }
 
 .btn-warning:hover:not(:disabled) {
-  background: linear-gradient(135deg, #e67e22 0%, #d35400 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(243, 156, 18, 0.35);
+  background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(253, 203, 110, 0.35);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  background: linear-gradient(135deg, #fd79a8 0%, #e84393 100%);
   color: white;
-  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.25);
+  box-shadow: 0 3px 10px rgba(253, 121, 168, 0.25);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: linear-gradient(135deg, #c0392b 0%, #a93226 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(231, 76, 60, 0.35);
+  background: linear-gradient(135deg, #e84393 0%, #d63384 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(253, 121, 168, 0.35);
 }
 
 .btn-info {
@@ -148,33 +148,33 @@ button {
 
 .btn-light {
   background: rgba(255, 255, 255, 0.95);
-  color: #58cc02;
-  border: 2px solid rgba(88, 204, 2, 0.3);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  color: #667eea;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(10px);
 }
 
 .btn-light:hover:not(:disabled) {
-  background: #58cc02;
+  background: #667eea;
   color: white;
-  border-color: #58cc02;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(88, 204, 2, 0.25);
+  border-color: #667eea;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
 }
 
 /* Outline button variants */
 .btn-outline-primary {
   background: transparent;
-  color: #58cc02;
-  border: 2px solid #58cc02;
-  box-shadow: 0 2px 8px rgba(88, 204, 2, 0.1);
+  color: #667eea;
+  border: 2px solid #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
 }
 
 .btn-outline-primary:hover:not(:disabled) {
-  background: #58cc02;
+  background: #667eea;
   color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(88, 204, 2, 0.25);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
 }
 
 /* Disabled state for all buttons */
@@ -384,41 +384,41 @@ header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  margin-bottom: 20px;
+  padding: 4px 12px;
+  margin-bottom: 8px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 255, 254, 0.95) 100%);
   backdrop-filter: blur(10px);
-  border-radius: 16px;
+  border-radius: 8px;
   box-shadow: 
-    0 2px 12px rgba(88, 204, 2, 0.08),
+    0 1px 6px rgba(102, 126, 234, 0.08),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(88, 204, 2, 0.12);
+  border: 1px solid rgba(102, 126, 234, 0.12);
 }
 
 .header-logo {
-  width: 64px;
-  height: 64px;
-  filter: drop-shadow(0 2px 6px rgba(88, 204, 2, 0.2));
+  width: 32px;
+  height: 32px;
+  filter: drop-shadow(0 1px 3px rgba(102, 126, 234, 0.2));
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: rgba(88, 204, 2, 0.08);
-  border-radius: 12px;
-  padding: 4px;
+  background: rgba(102, 126, 234, 0.08);
+  border-radius: 6px;
+  padding: 2px;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(88, 204, 2, 0.15);
+  border: 1px solid rgba(102, 126, 234, 0.15);
 }
 
 .header-logo:hover {
-  transform: scale(1.08) translateY(-2px);
-  filter: drop-shadow(0 4px 12px rgba(88, 204, 2, 0.3));
-  background: rgba(88, 204, 2, 0.12);
-  border: 1px solid rgba(88, 204, 2, 0.25);
+  transform: scale(1.05) translateY(-1px);
+  filter: drop-shadow(0 2px 6px rgba(102, 126, 234, 0.3));
+  background: rgba(102, 126, 234, 0.12);
+  border: 1px solid rgba(102, 126, 234, 0.25);
 }
 
 header h1 {
   color: #2d3748;
   margin: 0;
-  font-size: 1.8em;
+  font-size: 1.3em;
   font-weight: 700;
   text-shadow: none;
   flex: 1;
@@ -437,21 +437,21 @@ header h1 {
 .llm-status-bar {
   display: flex;
   align-items: center;
-  padding: 14px 18px;
-  margin-bottom: 18px;
+  padding: 4px 8px;
+  margin-bottom: 8px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.88) 0%, rgba(248, 255, 254, 0.92) 100%);
   backdrop-filter: blur(8px);
-  border-radius: 12px;
+  border-radius: 6px;
   box-shadow: 
-    0 2px 8px rgba(88, 204, 2, 0.06),
+    0 1px 4px rgba(102, 126, 234, 0.06),
     0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(88, 204, 2, 0.1);
+  border: 1px solid rgba(102, 126, 234, 0.1);
 }
 
 .llm-info {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 12px;
   flex-wrap: wrap;
   width: 100%;
 }
@@ -459,8 +459,8 @@ header h1 {
 .status-section {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 11px;
 }
 
 .status-label {
@@ -472,10 +472,10 @@ header h1 {
   color: #2d3748;
   font-weight: 700;
   background: rgba(248, 255, 254, 0.8);
-  padding: 6px 10px;
-  border-radius: 8px;
-  font-size: 13px;
-  border: 1px solid rgba(88, 204, 2, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  border: 1px solid rgba(102, 126, 234, 0.12);
   backdrop-filter: blur(4px);
 }
 
@@ -495,43 +495,56 @@ header h1 {
 
 /* ===================== Main Content Area ===================== */
 
+/* ===================== Main Content Area - 大幅压缩间距 ===================== */
+
 .translation-section, .results-section {
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(88, 204, 2, 0.08);
-  padding: 20px;
-  border-radius: 16px;
-  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border: 2px solid rgba(102, 126, 234, 0.12);
+  padding: 12px;
+  border-radius: 10px;
+  margin-bottom: 8px;
   box-shadow: 
-    0 2px 8px rgba(88, 204, 2, 0.04),
-    0 1px 3px rgba(0, 0, 0, 0.02);
+    0 4px 16px rgba(102, 126, 234, 0.08),
+    0 2px 8px rgba(0, 0, 0, 0.04);
+  position: relative;
 }
 
-/* Heading styles */
+/* 为翻译结果区域添加特殊突出效果 */
+.results-section {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.04) 0%, rgba(118, 75, 162, 0.03) 100%);
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  box-shadow: 
+    0 6px 24px rgba(102, 126, 234, 0.12),
+    0 3px 12px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+/* Heading styles - 压缩标题 */
 h2, h3, h4 {
   color: #2c3e50;
   margin-top: 0;
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 h2 {
-  font-size: 1.4em;
+  font-size: 1.2em;
 }
 
 h3 {
-  font-size: 1.2em;
-  margin-bottom: 10px;
+  font-size: 1.1em;
+  margin-bottom: 6px;
 }
 
 h4 {
-  font-size: 1.1em;
-  margin-bottom: 8px;
+  font-size: 1.0em;
+  margin-bottom: 4px;
 }
 
 p {
-  line-height: 1.4;
+  line-height: 1.3;
   color: #374151;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 /* ===================== Input Components ===================== */
@@ -539,15 +552,73 @@ p {
 .input-group textarea {
   width: 100%;
   padding: 10px;
-  border-radius: 12px;
+  border-radius: 8px;
   font-size: 14px;
   resize: vertical;
   font-family: inherit;
-  min-height: 50px;
-  background: #ffffff;
-  transition: all 0.3s ease;
-  border: none;
+  min-height: 45px;
+  background: rgba(255, 255, 255, 0.95);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(102, 126, 234, 0.2);
   outline: none;
+  backdrop-filter: blur(8px);
+  box-shadow: 
+    0 2px 8px rgba(102, 126, 234, 0.08),
+    0 1px 4px rgba(0, 0, 0, 0.04);
+  margin-top: 0;
+}
+
+.input-group textarea:focus {
+  border-color: #667eea;
+  box-shadow: 
+    0 3px 12px rgba(102, 126, 234, 0.15),
+    0 0 0 2px rgba(102, 126, 234, 0.1);
+  transform: translateY(-1px);
+}
+
+/* ===================== 语言选择容器 - 压缩间距 ===================== */
+
+.language-container {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.06) 100%);
+  backdrop-filter: blur(12px);
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 6px;
+  padding: 4px;
+  margin: 0;
+  box-shadow: 
+    0 4px 16px rgba(102, 126, 234, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.language-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.01) 100%);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.language-container h4 {
+  color: #667eea;
+  font-size: 0.75em;
+  font-weight: 800;
+  margin-bottom: 2px;
+  text-shadow: 0 1px 2px rgba(102, 126, 234, 0.1);
+  position: relative;
+  z-index: 1;
+  text-align: left;
+  padding: 0 1px;
 }
 
 /* ===================== Language Selection Grid ===================== */
@@ -555,45 +626,57 @@ p {
 .language-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
-  margin: 12px 0;
-  padding: 16px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(6px);
+  gap: 3px;
+  margin: 4px 0;
+  padding: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
   box-shadow: 
-    0 2px 8px rgba(88, 204, 2, 0.03),
-    0 1px 3px rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(88, 204, 2, 0.06);
+    0 2px 8px rgba(102, 126, 234, 0.08),
+    0 1px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(102, 126, 234, 0.12);
 }
 
 .select-all-option {
-  background: rgba(88, 204, 2, 0.1);
-  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.15);
+  border-radius: 3px;
   font-weight: 700;
-  color: #58cc02;
-  border: 1px solid rgba(88, 204, 2, 0.3);
+  color: #667eea;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  padding: 2px 3px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .select-all-option:hover {
-  background: rgba(88, 204, 2, 0.15);
-  border-color: rgba(88, 204, 2, 0.4);
+  background: rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.15);
 }
 
 .checkbox-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   cursor: pointer;
-  padding: 6px 8px;
-  border-radius: 8px;
-  transition: all 0.2s;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 2px 3px;
+  border-radius: 3px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  background: rgba(255, 255, 255, 0.8);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .checkbox-label:hover {
-  background-color: #f3f4f6;
+  background: rgba(102, 126, 234, 0.08);
+  border-color: rgba(102, 126, 234, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 4px rgba(102, 126, 234, 0.1);
 }
 
 /* ===================== Translation Results Area ===================== */
@@ -602,64 +685,68 @@ p {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
 }
 
 .results-header h2, .results-header h3 {
   margin: 0;
-  color: #374151;
-  font-weight: 700;
+  color: #667eea;
+  font-weight: 800;
+  font-size: 1.1em;
+  text-shadow: 0 1px 2px rgba(102, 126, 234, 0.1);
 }
 
 .original-text {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(6px);
-  padding: 10px 14px;
-  border-radius: 12px;
-  margin-bottom: 10px;
-  border-left: 4px solid #58cc02;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 255, 254, 0.9) 100%);
+  backdrop-filter: blur(8px);
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border-left: 3px solid #667eea;
   display: flex;
   align-items: center;
   gap: 8px;
   box-shadow: 
-    0 2px 8px rgba(88, 204, 2, 0.04),
-    0 1px 3px rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(88, 204, 2, 0.06);
+    0 2px 8px rgba(102, 126, 234, 0.1),
+    0 1px 4px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(102, 126, 234, 0.12);
 }
 
 .original-label {
-  font-weight: 700;
-  color: #58cc02;
-  font-size: 14px;
+  font-weight: 800;
+  color: #667eea;
+  font-size: 13px;
   white-space: nowrap;
 }
 
 .original-content {
   color: #374151;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.4;
   flex: 1;
 }
 
 .translations {
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(6px);
-  border-radius: 12px;
-  padding: 14px;
-  border-left: 4px solid #58cc02;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 255, 254, 0.9) 100%);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 12px;
+  border-left: 3px solid #667eea;
   box-shadow: 
-    0 2px 8px rgba(88, 204, 2, 0.04),
-    0 1px 3px rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(88, 204, 2, 0.06);
+    0 3px 12px rgba(102, 126, 234, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(102, 126, 234, 0.15);
 }
 
 .translation-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 6px 0;
-  border-bottom: 1px solid #f3f4f6;
-  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .translation-row:last-child {
@@ -667,36 +754,38 @@ p {
 }
 
 .translation-row:hover {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 6px 12px;
-  margin: 0 -12px;
+  background: rgba(102, 126, 234, 0.05);
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 0 -8px;
+  box-shadow: 0 1px 4px rgba(102, 126, 234, 0.08);
 }
 
 .language-name {
-  font-weight: 700;
-  color: #58cc02;
-  min-width: 70px;
+  font-weight: 800;
+  color: #667eea;
+  min-width: 60px;
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .translation-text {
   flex: 1;
   color: #374151;
   line-height: 1.4;
-  font-size: 15px; /* Increased default font size */
+  font-size: 14px;
+  font-weight: 500;
 }
 
 /* Font size adjustments for special languages */
 .translation-text.lang-hindi,
 .translation-text.lang-arabic {
-  font-size: 16px; /* Appropriately increased for Hindi and Arabic */
+  font-size: 17px; /* 进一步增大特殊语言字体 */
 }
 
 /* Appropriately increased for Cyrillic character languages (Russian, etc.) */
 .translation-text.lang-russian {
-  font-size: 16px;
+  font-size: 17px;
 }
 
 /* ===================== Settings Panel ===================== */
@@ -1250,4 +1339,186 @@ p {
   display: block;
   opacity: 0.9;
   font-size: 12px;
+}
+
+/* ===================== 翻译输入区域 - 重点突出 ===================== */
+
+.translation-section h3 {
+  color: #667eea;
+  font-size: 1.3em;
+  font-weight: 800;
+  margin-bottom: 16px;
+  text-shadow: 0 1px 2px rgba(102, 126, 234, 0.1);
+}
+
+/* ===================== Main Content Grid Layout ===================== */
+
+.main-content-grid {
+  display: grid;
+  grid-template-columns: min-content 1fr;
+  gap: 6px;
+  margin-top: 8px;
+  min-height: 300px;
+}
+
+.language-panel {
+  display: flex;
+  flex-direction: column;
+  width: min-content;
+  min-width: 70px;
+  max-width: 85px;
+}
+
+.results-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+  flex: 1;
+}
+
+/* 为语言选择面板调整样式 - 压缩间距 */
+.language-panel .language-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.language-panel .language-grid {
+  flex: 1;
+  grid-template-columns: 1fr; /* 改为单列布局，更紧凑 */
+  gap: 2px;
+  margin: 3px 0;
+  padding: 3px;
+  max-height: 350px;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.language-panel .checkbox-label {
+  padding: 2px 3px;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Results placeholder 样式 */
+.results-placeholder {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.04) 0%, rgba(118, 75, 162, 0.03) 100%);
+  backdrop-filter: blur(12px);
+  border: 2px dashed rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.placeholder-content h3 {
+  color: #667eea;
+  margin-bottom: 12px;
+  font-size: 1.3em;
+}
+
+.placeholder-content p {
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* 调整结果区域以适应新布局 */
+.results-panel .results-section {
+  height: 100%;
+  margin-bottom: 0;
+}
+
+.results-panel .translations {
+  flex: 1;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* ===================== 输入区域标题和按钮行布局 - 压缩间距 ===================== */
+
+.input-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 12px;
+}
+
+.input-header h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 1.0em;
+}
+
+.input-header .btn-group {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .input-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .input-header h3 {
+    text-align: center;
+    margin-bottom: 0;
+  }
+  
+  .input-header .btn-group {
+    justify-content: center;
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .main-content-grid {
+    grid-template-columns: min-content 1fr;
+    gap: 20px;
+  }
+  
+  .language-panel {
+    min-width: 260px;
+    max-width: 300px;
+  }
+}
+
+@media (max-width: 900px) {
+  .main-content-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  
+  .language-panel {
+    width: 100%;
+    min-width: auto;
+    max-width: none;
+  }
+  
+  .language-panel .language-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .results-panel {
+    min-height: 300px;
+  }
+}
+
+@media (max-width: 600px) {
+  .language-panel .language-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

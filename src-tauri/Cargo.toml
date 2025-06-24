@@ -46,17 +46,19 @@ jni = "0.21"
 version = "0.6"
 
 # Fix C++ linking issues on Android
-[target.aarch64-linux-android]
-rustflags = ["-C", "link-arg=-lc++_shared"]
-
-[target.armv7-linux-androideabi]
-rustflags = ["-C", "link-arg=-lc++_shared"]
-
-[target.i686-linux-android]
-rustflags = ["-C", "link-arg=-lc++_shared"]
-
-[target.x86_64-linux-android]
-rustflags = ["-C", "link-arg=-lc++_shared"]
+# Note: These rustflags are handled by Tauri's build system
+# Uncomment if needed for manual builds:
+# [target.aarch64-linux-android]
+# rustflags = ["-C", "link-arg=-lc++_shared"]
+# 
+# [target.armv7-linux-androideabi]
+# rustflags = ["-C", "link-arg=-lc++_shared"]
+# 
+# [target.i686-linux-android]
+# rustflags = ["-C", "link-arg=-lc++_shared"]
+# 
+# [target.x86_64-linux-android]
+# rustflags = ["-C", "link-arg=-lc++_shared"]
 
 # Android link configuration  
 [profile.release]

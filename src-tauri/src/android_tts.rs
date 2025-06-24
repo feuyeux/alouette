@@ -96,13 +96,6 @@ impl AndroidTTSEngine {
         ]
     }
 
-    pub fn get_supported_languages(&self) -> Vec<String> {
-        self.available_voices
-            .iter()
-            .map(|voice| voice.language.clone())
-            .collect()
-    }
-
     pub fn find_voice_for_language(&self, language: &str) -> Option<&AndroidVoice> {
         // First try exact language match
         if let Some(voice) = self.available_voices.iter().find(|v| v.language.eq_ignore_ascii_case(language)) {

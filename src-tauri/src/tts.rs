@@ -793,7 +793,7 @@ impl TTSEngine {
                 }
             }
             // If not a valid JSON command, treat as error
-            return Err("Invalid Android TTS command format".to_string());
+            Err("Invalid Android TTS command format".to_string())
         }
         
         #[cfg(not(target_os = "android"))]
@@ -801,8 +801,7 @@ impl TTSEngine {
             // On other platforms, treat as audio data
             self.play_audio_from_bytes(&audio_data).await?;
             println!("TTS playback completed");
+            Ok(())
         }
-        
-        Ok(())
     }
 }

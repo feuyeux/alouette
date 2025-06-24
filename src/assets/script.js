@@ -42,7 +42,7 @@ export default {
         'Japanese',
         // (Koreanic)
         'Korean',
-        'Select All'
+        'All'
       ],
       isTranslating: false,
       currentTranslation: null,
@@ -144,11 +144,11 @@ export default {
 
     /**
      * Check if all real languages are selected
-     * @returns {boolean} True if all languages except 'Select All' are selected
+     * @returns {boolean} True if all languages except 'All' are selected
      */
     isAllSelected() {
-      const realLanguages = this.availableLanguages.filter(lang => lang !== 'Select All');
-      const selectedRealLanguages = this.selectedLanguages.filter(lang => lang !== 'Select All');
+      const realLanguages = this.availableLanguages.filter(lang => lang !== 'All');
+      const selectedRealLanguages = this.selectedLanguages.filter(lang => lang !== 'All');
       return selectedRealLanguages.length === realLanguages.length && realLanguages.length > 0;
     },
 
@@ -169,7 +169,7 @@ export default {
       }
 
       // Fallback: use current selection order (for backward compatibility)
-      const selectedRealLanguages = this.selectedLanguages.filter(lang => lang !== 'Select All');
+      const selectedRealLanguages = this.selectedLanguages.filter(lang => lang !== 'All');
       return selectedRealLanguages.filter(lang =>
         this.currentTranslation.translations.hasOwnProperty(lang)
       );
@@ -218,7 +218,7 @@ export default {
       console.log('Starting translation process...')
 
       // Filter out "Select All" option, keep only real languages
-      const realSelectedLanguages = this.selectedLanguages.filter(lang => lang !== 'Select All');
+      const realSelectedLanguages = this.selectedLanguages.filter(lang => lang !== 'All');
 
       // Validation
       if (!this.inputText || realSelectedLanguages.length === 0) {
@@ -643,29 +643,29 @@ export default {
     },
 
     /**
-     * Select or deselect all available languages
+     * Select or deAll available languages
      */
     selectAllLanguages() {
-      const realLanguages = this.availableLanguages.filter(lang => lang !== 'Select All');
+      const realLanguages = this.availableLanguages.filter(lang => lang !== 'All');
       if (this.isAllSelected) {
         // If all selected, deselect all
         console.log('Deselecting all languages')
         this.selectedLanguages = []
       } else {
-        // Otherwise select all languages (except "Select All" option itself)
+        // Otherwise select all languages (except "All" option itself)
         console.log('Selecting all languages')
         this.selectedLanguages = [...realLanguages]
       }
     },
 
     /**
-     * Toggle select all functionality
+     * Toggle All functionality
      * @param {Event} event - Click event
      */
     toggleSelectAll(event) {
       event.preventDefault();
-      const realLanguages = this.availableLanguages.filter(lang => lang !== 'Select All');
-      const selectedRealLanguages = this.selectedLanguages.filter(lang => lang !== 'Select All');
+      const realLanguages = this.availableLanguages.filter(lang => lang !== 'All');
+      const selectedRealLanguages = this.selectedLanguages.filter(lang => lang !== 'All');
 
       if (selectedRealLanguages.length === realLanguages.length) {
         // If all selected, deselect all
