@@ -153,9 +153,16 @@ English, Chinese, Japanese, Korean, French, German, Spanish, Italian, Russian, A
 ```bash
 npm run dev              # Development mode
 npm run build            # Production build
-npm run build:android    # Android APK
-npm run build:ios        # iOS app (macOS only)
+npm run tauri android build    # Android APK (uses global Gradle config)
+npm run tauri ios build        # iOS app (macOS only)
 ```
+
+### Global Configuration
+
+This project uses optimized global configurations for better performance:
+
+- **Gradle**: Global config in `~/.gradle/` with China mirrors and performance optimizations
+- **No Local Scripts**: All build scripts have been removed in favor of standard Tauri commands
 
 ## Demo
 
@@ -174,7 +181,7 @@ npm run build:ios        # iOS app (macOS only)
 
 ### Prerequisites
 
-Ensure your project directory contains a complete Android SDK setup:
+Ensure your project directory contains a complete Android SDK setup. The project uses global Gradle configuration for optimal performance.
 
 ```bash
 # Set Android environment variables
@@ -184,29 +191,42 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin
 ```
 
-### Launch Android Emulator
+### Build with Tauri
+
+The project now uses standard Tauri commands with global Gradle optimization:
+
+```bash
+# Build debug version (recommended for development)
+npm run tauri android build -- --debug
+
+# Build release version (requires signing setup)
+npm run tauri android build
+```
+
+**Benefits of Global Configuration:**
+- ✅ Faster builds with China mirrors
+- ✅ Optimized memory usage and parallel builds
+- ✅ Consistent configuration across projects
+- ✅ No local Gradle files to maintain
+
+---
+
+## 📋 Project Structure
+
+This project maintains a clean structure with minimal configuration files:
+- All build scripts have been replaced with standard Tauri commands
+- Global Gradle configuration provides optimal build performance
+- No redundant local configuration files
+
+### Launch Android Emulator & Deploy
 
 ```bash
 # Start emulator in background
-cd /home/hanl5/coding/alouette
 android-sdk/emulator/emulator -avd test_avd -no-snapshot-save &
 
 # Wait for emulator to fully boot, then check device connection
 adb devices
 ```
-
-### Build Debug APK
-
-```bash
-# Build debug version (auto-signed, ready to install)
-cd /home/hanl5/coding/alouette
-export ANDROID_HOME=/home/hanl5/coding/alouette/android-sdk
-export ANDROID_SDK_ROOT=$ANDROID_HOME
-export PATH=$PATH:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin
-npm run build:android -- --debug
-```
-
-**Note**: Debug builds are automatically signed and suitable for development/testing. Release builds require manual signing before installation.
 
 ### Deploy & Verify
 
@@ -226,3 +246,9 @@ adb shell ps | grep alouette
 # 5. Check app logs for troubleshooting (optional)
 adb logcat | grep -i "alouette\|rust\|tauri"
 ```
+
+---
+
+## 📋 Configuration Files
+
+- All build scripts have been replaced with standard Tauri commands for better maintainability

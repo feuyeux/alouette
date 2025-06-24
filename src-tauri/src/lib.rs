@@ -185,6 +185,60 @@ async fn get_edge_tts_voices() -> Result<HashMap<String, Vec<String>>, String> {
     Ok(voices)
 }
 
+/**
+ * Native Android TTS command for when WebView speechSynthesis is not available
+ * This is a fallback for Android environments where WebView lacks TTS support
+ * 
+ * @param text - Text to synthesize
+ * @param locale - Locale code (e.g., "en-US", "zh-CN")
+ * @returns Success or error message
+ */
+#[tauri::command]
+async fn play_android_tts_native(text: String, locale: String) -> Result<(), String> {
+    println!("Native Android TTS request - Text: '{}', Locale: '{}'", text, locale);
+    
+    #[cfg(target_os = "android")]
+    {
+        // On Android, try to use the system TTS
+        use std::process::Command;
+        
+        // Android systems often have TTS via accessibility services or espeak
+        // First try the most common Android TTS approach
+        let tts_result = Command::new("am")
+            .args(&[
+                "start",
+                "-a", "android.intent.action.TTS_SERVICE",
+                "--es", "android.speech.tts.engine.EXTRA_UTTERANCE_ID", "alouette_tts",
+                "--es", "android.speech.tts.engine.EXTRA_TEXT", &text,
+                "--es", "android.speech.tts.engine.EXTRA_LOCALE", &locale
+            ])
+            .output();
+            
+        match tts_result {
+            Ok(output) => {
+                if output.status.success() {
+                    println!("Android TTS command executed successfully");
+                    Ok(())
+                } else {
+                    let error_msg = String::from_utf8_lossy(&output.stderr);
+                    println!("Android TTS command failed: {}", error_msg);
+                    Err(format!("Android TTS failed: {}", error_msg))
+                }
+            }
+            Err(e) => {
+                println!("Failed to execute Android TTS command: {}", e);
+                Err(format!("Could not execute Android TTS: {}", e))
+            }
+        }
+    }
+    
+    #[cfg(not(target_os = "android"))]
+    {
+        // On non-Android platforms, return an informative error
+        Err("Native Android TTS is only available on Android devices".to_string())
+    }
+}
+
 // ================================
 // TTS Cache Management Commands
 // ================================
@@ -383,6 +437,7 @@ pub fn run() {
             play_tts_with_settings,
             get_available_tts_voices,
             get_edge_tts_voices,
+            play_android_tts_native,
             
             // Cache management
             clear_tts_cache,

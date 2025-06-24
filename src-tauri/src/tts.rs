@@ -1,12 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::process::Command;
 use std::path::PathBuf;
-use tokio::fs::{File, create_dir_all};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+#[cfg(not(target_os = "android"))]
 use rodio::{Decoder, OutputStream, Sink};
+#[cfg(not(target_os = "android"))]
 use std::io::Cursor;
-use sha2::{Digest, Sha256};
 
 #[cfg(target_os = "android")]
 use crate::android_tts::AndroidTTSEngine;
@@ -62,59 +61,9 @@ impl TTSEngine {
         }
     }
 
-    async fn ensure_cache_dir(&self) -> Result<(), String> {
-        create_dir_all(&self.cache_dir).await
-            .map_err(|e| format!("Failed to create cache directory: {}", e))
-    }
+    // Cache key generation moved inline to synthesize_speech_desktop
 
-    fn generate_cache_key(&self, text: &str, voice: &str) -> String {
-        let mut hasher = Sha256::new();
-        hasher.update(text.as_bytes());
-        hasher.update(voice.as_bytes());
-        format!("{:x}.mp3", hasher.finalize())
-    }
-
-    async fn get_from_cache(&self, cache_key: &str) -> Option<Vec<u8>> {
-        let cache_file = self.cache_dir.join(cache_key);
-        
-        if cache_file.exists() {
-            match File::open(&cache_file).await {
-                Ok(mut file) => {
-                    let mut audio_data = Vec::new();
-                    match file.read_to_end(&mut audio_data).await {
-                        Ok(_) => {
-                            println!("Reading TTS audio from cache: {}", cache_key);
-                            Some(audio_data)
-                        },
-                        Err(e) => {
-                            println!("Failed to read cache file: {}", e);
-                            None
-                        }
-                    }
-                },
-                Err(e) => {
-                    println!("Failed to open cache file: {}", e);
-                    None
-                }
-            }
-        } else {
-            None
-        }
-    }
-
-    async fn save_to_cache(&self, cache_key: &str, audio_data: &[u8]) -> Result<(), String> {
-        self.ensure_cache_dir().await?;
-        
-        let cache_file = self.cache_dir.join(cache_key);
-        let mut file = File::create(&cache_file).await
-            .map_err(|e| format!("Failed to create cache file: {}", e))?;
-        
-        file.write_all(audio_data).await
-            .map_err(|e| format!("Failed to write cache file: {}", e))?;
-        
-        println!("TTS audio cached: {}", cache_key);
-        Ok(())
-    }
+    // Cache functions removed as they are not used in Android TTS
 
     pub async fn clear_cache(&self) -> Result<u64, String> {
         let mut total_size = 0u64;
@@ -296,41 +245,7 @@ impl TTSEngine {
         voices_map
     }
 
-    pub fn select_voice_for_language(&self, language_name: &str) -> Option<&VoiceInfo> {
-        // Map language names to locale codes
-        let locale = match language_name {
-            "English" => "en-US",
-            "French" => "fr-FR",
-            "Spanish" => "es-ES",
-            "Italian" => "it-IT",
-            "Russian" => "ru-RU",
-            "Greek" => "el-GR",
-            "German" => "de-DE",
-            "Hindi" => "hi-IN",
-            "Arabic" => "ar-SA",
-            "Japanese" => "ja-JP",
-            "Korean" => "ko-KR",
-            "Chinese" => "zh-CN",
-            _ => {
-                // If the input is already in locale format
-                if language_name.contains("-") {
-                    language_name
-                } else {
-                    "en-US" // Default
-                }
-            }
-        };
-
-        // Find matching voice (prefer female voices)
-        self.voices.iter()
-            .filter(|voice| voice.locale == locale)
-            .find(|voice| voice.gender == "Female")
-            .or_else(|| {
-                // If no female voice, select the first matching voice
-                self.voices.iter()
-                    .find(|voice| voice.locale == locale)
-            })
-    }
+    // Voice selection moved inline to synthesize_speech_desktop
 
     pub async fn synthesize_speech(&self, text: &str, language: &str) -> Result<Vec<u8>, String> {
         // On Android, use Android TTS instead of external commands
@@ -453,287 +368,11 @@ impl TTSEngine {
         Ok(audio_data)
     }
 
-    async fn synthesize_with_edge_tts(&self, text: &str, voice: &str) -> Result<Vec<u8>, String> {
-        use std::process::Stdio;
-        use tokio::process::Command as TokioCommand;
+    // Desktop TTS functions removed as Android uses different TTS system
 
-        // Check if edge-tts is available
-        let check_output = TokioCommand::new("edge-tts")
-            .arg("--list-voices")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .output()
-            .await;
+    // Text processing functions removed as they're not used in Android TTS
 
-        if check_output.is_err() {
-            return Err("edge-tts not available".to_string());
-        }
-
-        // Create temporary file
-        let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!("edge_tts_{}.mp3", uuid::Uuid::new_v4()));
-
-        // Call edge-tts
-        let output = TokioCommand::new("edge-tts")
-            .arg("--voice")
-            .arg(voice)
-            .arg("--text")
-            .arg(text)
-            .arg("--write-media")
-            .arg(&temp_file)
-            .output()
-            .await
-            .map_err(|e| format!("Failed to execute edge-tts command: {}", e))?;
-
-        if !output.status.success() {
-            let error_msg = String::from_utf8_lossy(&output.stderr);
-            let enhanced_error = if error_msg.contains("NoAudioReceived") {
-                format!("Edge TTS failed to generate audio - this usually indicates a language/voice mismatch or network issue. Voice: {}, Text sample: '{}'. Error: {}", 
-                        voice, Self::safe_truncate(text, 30), error_msg)
-            } else {
-                format!("edge-tts execution failed: {}", error_msg)
-            };
-            return Err(enhanced_error);
-        }
-
-        // Check if file was generated
-        if !temp_file.exists() {
-            return Err("edge-tts did not generate audio file".to_string());
-        }
-
-        // Read audio file
-        let mut file = File::open(&temp_file).await
-            .map_err(|e| format!("Failed to open audio file: {}", e))?;
-
-        let mut audio_data = Vec::new();
-        file.read_to_end(&mut audio_data).await
-            .map_err(|e| format!("Failed to read audio file: {}", e))?;
-
-        // Delete temporary file
-        let _ = tokio::fs::remove_file(&temp_file).await;
-
-        if audio_data.is_empty() {
-            return Err("Generated audio file is empty".to_string());
-        }
-
-        Ok(audio_data)
-    }
-
-    async fn synthesize_with_local_tts(&self, text: &str, locale: &str) -> Result<Vec<u8>, String> {
-        let temp_dir = std::env::temp_dir();
-        let temp_file = temp_dir.join(format!("local_tts_{}.wav", uuid::Uuid::new_v4()));
-
-        // Enhanced locale to espeak voice mapping with better support
-        let espeak_voice = match locale {
-            "zh-CN" => "zh",
-            "en-US" => "en-us",
-            "ja-JP" => "ja", 
-            "ko-KR" => "ko",
-            "fr-FR" => "fr",
-            "de-DE" => "de", 
-            "es-ES" => "es",
-            "it-IT" => "it",
-            "ru-RU" => "ru",
-            "ar-SA" => "ar",  // Arabic
-            "el-GR" => "el",  // Greek
-            "hi-IN" => "hi",  // Hindi
-            _ => "en-us",
-        };
-
-        let temp_file_str = temp_file.to_str().unwrap();
-        
-        // Enhanced TTS commands with better parameters
-        let tts_commands = vec![
-            // espeak-ng with optimized settings for each language
-            ("espeak-ng", vec![
-                "-v", espeak_voice,
-                "-s", "160",     // Slightly faster speech rate  
-                "-a", "80",      // Reduced amplitude to prevent distortion
-                "-g", "5",       // Small gap between words
-                "-w", temp_file_str,
-                text
-            ]),
-            // Fallback to basic espeak if espeak-ng fails
-            ("espeak", vec![
-                "-v", espeak_voice,
-                "-s", "160",
-                "-a", "80", 
-                "-w", temp_file_str,
-                text
-            ]),
-            // Festival as another fallback (English only)
-            ("text2wave", vec![
-                "-o", temp_file_str,
-                text
-            ]),
-        ];
-
-        let mut last_error = String::new();
-        
-        for (cmd, args) in &tts_commands {
-            println!("Trying local TTS: {} with voice '{}' for locale '{}'", cmd, espeak_voice, locale);
-            
-            let output = Command::new(cmd)
-                .args(args.iter())
-                .output();
-                
-            match output {
-                Ok(result) if result.status.success() => {
-                    if temp_file.exists() {
-                        match self.read_and_validate_audio_file(&temp_file).await {
-                            Ok(audio_data) => {
-                                let _ = tokio::fs::remove_file(&temp_file).await;
-                                println!("Local TTS synthesis successful: {}, audio size: {} bytes", cmd, audio_data.len());
-                                return Ok(audio_data);
-                            },
-                            Err(e) => {
-                                last_error = format!("{} generated invalid audio: {}", cmd, e);
-                                println!("{}", last_error);
-                            }
-                        }
-                    } else {
-                        last_error = format!("{} did not generate audio file", cmd);
-                        println!("{}", last_error);
-                    }
-                },
-                Ok(result) => {
-                    let stderr = String::from_utf8_lossy(&result.stderr);
-                    last_error = format!("{} failed (status: {}): {}", cmd, result.status, stderr);
-                    println!("{}", last_error);
-                },
-                Err(e) => {
-                    last_error = format!("{} command not available: {}", cmd, e);
-                    println!("{}", last_error);
-                }
-            }
-        }
-
-        Err(format!("All local TTS engines failed. Last error: {}", last_error))
-    }
-    
-    // Text preprocessing for better TTS results
-    // Helper function to read and validate audio files
-    async fn read_and_validate_audio_file(&self, file_path: &std::path::Path) -> Result<Vec<u8>, String> {
-        let mut file = File::open(file_path).await
-            .map_err(|e| format!("Failed to open audio file: {}", e))?;
-        
-        let mut audio_data = Vec::new();
-        file.read_to_end(&mut audio_data).await
-            .map_err(|e| format!("Failed to read audio file: {}", e))?;
-        
-        if audio_data.is_empty() {
-            return Err("Generated audio file is empty".to_string());
-        }
-        
-        // Basic audio file validation - check for common audio headers
-        let is_valid_audio = audio_data.len() > 44 && (
-            // WAV file
-            audio_data.starts_with(b"RIFF") ||
-            // MP3 file
-            audio_data.starts_with(&[0xFF, 0xFB]) || audio_data.starts_with(&[0xFF, 0xFA]) ||
-            // OGG file
-            audio_data.starts_with(b"OggS") ||
-            // Basic audio content check
-            audio_data.len() > 1000
-        );
-        
-        if !is_valid_audio {
-            return Err(format!("Generated audio file appears invalid (size: {} bytes)", audio_data.len()));
-        }
-        
-        Ok(audio_data)
-    }
-
-    /// Safely truncate a UTF-8 string to a maximum number of characters
-    /// This prevents panics when dealing with multi-byte Unicode characters
-    fn safe_truncate(text: &str, max_chars: usize) -> String {
-        if text.chars().count() <= max_chars {
-            text.to_string()
-        } else {
-            format!("{}...", text.chars().take(max_chars).collect::<String>())
-        }
-    }
-
-    /// Detect the script/writing system of the text to help with language detection
-    fn detect_text_script(text: &str) -> Option<String> {
-        let chars: Vec<char> = text.chars().collect();
-        let total_chars = chars.len();
-        
-        if total_chars == 0 {
-            return None;
-        }
-        
-        let mut chinese_chars = 0;
-        let mut japanese_chars = 0;
-        let mut korean_chars = 0;
-        let mut arabic_chars = 0;
-        let mut hindi_chars = 0;
-        let mut cyrillic_chars = 0;
-        let mut greek_chars = 0;
-        
-        for ch in chars {
-            let code = ch as u32;
-            match code {
-                // CJK Unified Ideographs - could be Chinese or Japanese
-                0x4E00..=0x9FFF => chinese_chars += 1,
-                // Hiragana (Japanese)
-                0x3040..=0x309F => japanese_chars += 1,
-                // Katakana (Japanese)
-                0x30A0..=0x30FF => japanese_chars += 1,
-                // Hangul (Korean)
-                0xAC00..=0xD7AF | 0x1100..=0x11FF | 0x3130..=0x318F => korean_chars += 1,
-                // Arabic
-                0x0600..=0x06FF | 0x0750..=0x077F => arabic_chars += 1,
-                // Devanagari (Hindi)
-                0x0900..=0x097F => hindi_chars += 1,
-                // Cyrillic (Russian)
-                0x0400..=0x04FF => cyrillic_chars += 1,
-                // Greek
-                0x0370..=0x03FF => greek_chars += 1,
-                _ => {}
-            }
-        }
-        
-        let threshold = total_chars / 3; // At least 1/3 of characters should match
-        
-        if korean_chars > threshold {
-            Some("Korean".to_string())
-        } else if japanese_chars > 0 || (chinese_chars > 0 && japanese_chars >= chinese_chars / 4) {
-            // If we have any Hiragana/Katakana, or significant Japanese markers, it's Japanese
-            Some("Japanese".to_string())
-        } else if chinese_chars > threshold {
-            Some("Chinese".to_string())
-        } else if arabic_chars > threshold {
-            Some("Arabic".to_string())
-        } else if hindi_chars > threshold {
-            Some("Hindi".to_string())
-        } else if cyrillic_chars > threshold {
-            Some("Russian".to_string())
-        } else if greek_chars > threshold {
-            Some("Greek".to_string())
-        } else {
-            None // Latin-based or mixed scripts
-        }
-    }
-
-    /// Check if the script detection is confident enough to override user input
-    fn is_script_confident(detected: &str, text: &str) -> bool {
-        let chars: Vec<char> = text.chars().collect();
-        let total_chars = chars.len();
-        
-        if total_chars < 3 {
-            return false; // Too short to be confident
-        }
-        
-        match detected {
-            "Chinese" | "Japanese" | "Korean" | "Arabic" | "Hindi" | "Russian" | "Greek" => {
-                // For non-Latin scripts, if detected, we're quite confident
-                true
-            }
-            _ => false
-        }
-    }
-
+    #[cfg(not(target_os = "android"))]
     pub async fn play_audio_from_bytes(&self, audio_data: &[u8]) -> Result<(), String> {
         if audio_data.is_empty() {
             return Err("Audio data is empty - nothing to play".to_string());

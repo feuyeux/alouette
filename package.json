@@ -7,9 +7,9 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "build:android": "tauri android build",
+    "build:android": "scripts/patch-android-manifest.sh && tauri android build",
     "build:ios": "tauri ios build",
-    "dev:android": "tauri android dev",
+    "dev:android": "scripts/patch-android-manifest.sh && tauri android dev",
     "dev:ios": "tauri ios dev",
     "vite:build": "vite build",
     "tauri": "tauri"

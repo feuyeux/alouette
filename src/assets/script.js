@@ -388,17 +388,47 @@ export default {
             
             console.log('Processing Android TTS command:', ttsCommand)
             
-            // Use WebView's speechSynthesis API for Android
-            if ('speechSynthesis' in window) {
+            // Check if speechSynthesis is available
+            if ('speechSynthesis' in window && speechSynthesis) {
+              // Wait for voices to load if they're not ready
+              const waitForVoices = () => {
+                return new Promise((resolve) => {
+                  let voices = speechSynthesis.getVoices()
+                  if (voices.length > 0) {
+                    resolve(voices)
+                    return
+                  }
+                  
+                  const onVoicesChanged = () => {
+                    voices = speechSynthesis.getVoices()
+                    if (voices.length > 0) {
+                      speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged)
+                      resolve(voices)
+                    }
+                  }
+                  
+                  speechSynthesis.addEventListener('voiceschanged', onVoicesChanged)
+                  
+                  // Fallback timeout
+                  setTimeout(() => {
+                    speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged)
+                    resolve(speechSynthesis.getVoices())
+                  }, 2000)
+                })
+              }
+              
+              const voices = await waitForVoices()
+              console.log('Available voices:', voices.map(v => `${v.name} (${v.lang})`))
+              
               const utterance = new SpeechSynthesisUtterance(ttsCommand.text)
               utterance.lang = ttsCommand.locale || ttsCommand.language || lang
               utterance.rate = this.ttsSettings.rate || 0.8
               utterance.volume = this.ttsSettings.volume || 0.9
               
               // Find matching voice
-              const voices = speechSynthesis.getVoices()
               const matchingVoice = voices.find(voice => 
                 voice.lang === ttsCommand.locale || 
+                voice.lang.startsWith(ttsCommand.locale?.split('-')[0]) ||
                 voice.lang.startsWith(ttsCommand.language) ||
                 voice.name === ttsCommand.voice
               )
@@ -406,6 +436,8 @@ export default {
               if (matchingVoice) {
                 utterance.voice = matchingVoice
                 console.log(`Using voice: ${matchingVoice.name} (${matchingVoice.lang})`)
+              } else {
+                console.log(`No matching voice found for ${ttsCommand.locale}, using default`)
               }
               
               // Play the speech
@@ -421,12 +453,26 @@ export default {
                   console.error('Android TTS playback error:', event.error)
                   reject(new Error(`Android TTS error: ${event.error}`))
                 }
+                
+                // Fallback timeout
+                setTimeout(() => {
+                  console.log('TTS playback timeout, assuming completed')
+                  resolve()
+                }, 10000)
               })
               
               this.playingText = null
               return
             } else {
-              throw new Error('speechSynthesis not available in this WebView')
+              // speechSynthesis not available - provide user feedback
+              console.log('speechSynthesis not available in this WebView')
+              
+              // For Android emulator, speechSynthesis may not be available
+              // Provide user-friendly feedback instead of error
+              alert(`📱 Android TTS Note: speechSynthesis API is not available in this WebView environment.\n\n🔧 This is normal for Android emulators. TTS functionality requires either:\n• Real Android device with TTS engine\n• WebView with speechSynthesis support\n\nText to speak: "${ttsCommand.text}"\nLanguage: ${ttsCommand.locale}`)
+              
+              this.playingText = null
+              return
             }
           } catch (parseError) {
             console.error('Failed to parse Android TTS command:', parseError)

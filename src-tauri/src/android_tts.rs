@@ -96,41 +96,6 @@ impl AndroidTTSEngine {
         ]
     }
 
-    pub fn find_voice_for_language(&self, language: &str) -> Option<&AndroidVoice> {
-        // First try exact language match
-        if let Some(voice) = self.available_voices.iter().find(|v| v.language.eq_ignore_ascii_case(language)) {
-            return Some(voice);
-        }
-
-        // Then try locale-based matching
-        let locale = self.language_to_locale(language);
-        self.available_voices.iter().find(|v| v.locale == locale)
-    }
-
-    fn language_to_locale<'a>(&self, language: &'a str) -> &'a str {
-        match language.to_lowercase().as_str() {
-            "english" => "en-US",
-            "spanish" => "es-ES", 
-            "french" => "fr-FR",
-            "italian" => "it-IT",
-            "russian" => "ru-RU",
-            "greek" => "el-GR",
-            "german" => "de-DE",
-            "hindi" => "hi-IN",
-            "arabic" => "ar-SA",
-            "japanese" => "ja-JP",
-            "korean" => "ko-KR",
-            "chinese" => "zh-CN",
-            _ => {
-                if language.contains("-") {
-                    language
-                } else {
-                    "en-US"
-                }
-            }
-        }
-    }
-
     /// Android-compatible TTS synthesis
     /// This will be called from the frontend using Android WebView's TTS capabilities
     pub async fn synthesize_speech(&self, text: &str, language: &str) -> Result<String, String> {
@@ -141,19 +106,49 @@ impl AndroidTTSEngine {
             return Err("Cannot synthesize empty text".to_string());
         }
 
-        let voice = self.find_voice_for_language(language)
-            .ok_or_else(|| format!("No voice available for language: {}", language))?;
+        // Simple language to voice mapping for Android TTS
+        let voice_name = match language.to_lowercase().as_str() {
+            "english" => "en-US-default",
+            "spanish" => "es-ES-default",
+            "french" => "fr-FR-default",
+            "italian" => "it-IT-default",
+            "russian" => "ru-RU-default",
+            "greek" => "el-GR-default",
+            "german" => "de-DE-default",
+            "hindi" => "hi-IN-default",
+            "arabic" => "ar-SA-default",
+            "japanese" => "ja-JP-default",
+            "korean" => "ko-KR-default",
+            "chinese" => "zh-CN-default",
+            _ => "en-US-default", // Default fallback
+        };
 
-        println!("Android TTS Debug - Selected voice: {} ({})", voice.name, voice.locale);
+        let locale = match language.to_lowercase().as_str() {
+            "english" => "en-US",
+            "spanish" => "es-ES",
+            "french" => "fr-FR",
+            "italian" => "it-IT",
+            "russian" => "ru-RU",
+            "greek" => "el-GR",
+            "german" => "de-DE",
+            "hindi" => "hi-IN",
+            "arabic" => "ar-SA",
+            "japanese" => "ja-JP",
+            "korean" => "ko-KR",
+            "chinese" => "zh-CN",
+            _ => "en-US", // Default fallback
+        };
+
+        println!("Android TTS Debug - Selected voice: {} ({})", voice_name, locale);
 
         // For Android, we return a special marker followed by TTS command 
         // The frontend will recognize this and use Android's WebView speechSynthesis API
         let tts_command = serde_json::json!({
             "type": "android_tts_command",
             "text": text,
-            "voice": voice.name,
-            "locale": voice.locale,
-            "language": voice.language
+            "voice": voice_name,
+            "locale": locale,
+            "language": language
         });
 
         Ok(tts_command.to_string())

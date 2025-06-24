@@ -2,15 +2,20 @@
 
 A comprehensive guide for building and deploying the Alouette AI translation application on Android devices across different platforms.
 
-> **🔧 Development Note**: For daily verification and development, use **debug builds** (`npm run dev:android`). Release builds are only for production deployment.
+> **🔧 Development Note**: For daily verification and development, use **debug builds** (`npm run tauri android dev`). Release builds are only for production deployment.
 > 
-> **Quick Verification**: `npm run dev:android` → Auto build+install+hot reload
+> **📋 正确执行顺序**: 
+> 1. **配置环境变量** → 设置ANDROID_HOME和PATH
+> 2. **初始化项目** → `npm run tauri android init` (仅首次)
+> 3. **启动模拟器** → 使用完整路径启动AVD
+> 4. **编译应用** → `npm run tauri android dev`
+> 5. **部署运行** → 自动安装到模拟器
 >
-> **⚠️ Linux Users**: If you see "emulator command not found", use the full path: `$ANDROID_HOME/emulator/emulator` instead of just `emulator`. See [Troubleshooting](#troubleshooting) for details.
+> **⚠️ Linux Users**: 必须使用完整路径 `$ANDROID_HOME/emulator/emulator` 而不是 `emulator` 命令。参见 [Troubleshooting](#troubleshooting)。
 >
-> **⚠️ Memory Warning**: DO NOT allocate more than 2GB memory to the emulator on Linux systems. Using 4GB+ can cause system crashes and VS Code OOM-kill. **Recommended: 1.5-2GB for stable operation**.
+> **⚠️ Memory Warning**: Linux系统模拟器内存不要超过1GB。使用2GB+会导致系统崩溃和VS Code OOM-kill。**推荐: 1GB稳定运行**。
 >
-> **🚨 Critical**: If emulator crashes repeatedly, reduce to 1GB memory and disable hardware acceleration with `-gpu swiftshader_indirect`.
+> **🚨 Critical**: 如果模拟器反复崩溃，减少到1GB内存并使用 `-gpu swiftshader_indirect` 禁用硬件加速。
 
 ## 📋 Table of Contents
 
@@ -28,7 +33,7 @@ A comprehensive guide for building and deploying the Alouette AI translation app
 
 ## Status Overview
 
-### ✅ Current Status (June 17, 2025)
+### ✅ Current Status (June 24, 2025)
 
 **Translation functionality**: **FIXED** ✅  
 **Build status**: Verified working on both macOS and Linux  
@@ -38,7 +43,7 @@ A comprehensive guide for building and deploying the Alouette AI translation app
 #### Key Achievements
 - ✅ **Translation errors resolved** - Fixed "undefined" error issues
 - ✅ **Cross-platform builds** - Working on macOS Apple Silicon and Linux
-- ✅ **Network connectivity** - Ollama integration verified
+- ✅ **Network connectivity** - Ollima integration verified
 - ✅ **Comprehensive error handling** - Enhanced debugging capabilities
 - ✅ **Performance optimized** - Debug APK ~726MB, Release APK ~120MB
 - 🔧 **Development workflow optimized** - Debug builds auto-signed for direct installation
@@ -113,10 +118,12 @@ adb wait-for-device && adb devices
 # Set up Android SDK in project directory
 cd /path/to/your/alouette/project
 export ANDROID_HOME="$PWD/android-sdk"
-export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
+export GRADLE_HOME="$PWD/gradle-8.14.2"  # 使用项目本地Gradle
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$GRADLE_HOME/bin:$PATH"
 
-# Verify ADB and emulator are accessible
+# Verify ADB, Gradle and emulator are accessible
 adb --version
+gradle --version  # 应该显示8.14.2
 which emulator || echo "emulator not in PATH, use full path: $ANDROID_HOME/emulator/emulator"
 
 # IMPORTANT: If 'emulator' command is not found, always use the full path:
@@ -184,7 +191,9 @@ watch -n 2 'free -h && echo "=== Top Memory Users ===" && ps aux --sort=-%mem | 
 
 ## Development Workflow
 
-### 1. Environment Preparation
+> **🔧 正确执行顺序**: 配置环境变量 → 初始化Android项目 → 启动模拟器 → 编译 → 部署
+
+### 步骤1: 配置环境变量 (必须首先执行)
 
 **For macOS:**
 ```bash
@@ -193,63 +202,280 @@ cd ~/zoo && source android-env.sh
 
 **For Linux:**
 ```bash
-cd /path/to/alouette && export ANDROID_HOME="$PWD/android-sdk" && export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
-```
-
-### 2. Emulator Startup
-
-**Single Command for macOS:**
-```bash
-# Ensure environment is set up first
+cd /path/to/alouette
 export ANDROID_HOME="$PWD/android-sdk"
-export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
-$ANDROID_HOME/emulator/emulator -avd Alouette_ARM64 -memory 4096 -cores 4 -gpu auto -no-snapshot-save & adb wait-for-device
+export GRADLE_HOME="$PWD/gradle-8.14.2"  # 使用项目本地Gradle
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$GRADLE_HOME/bin:$PATH"
+
+# 验证环境变量
+echo "ANDROID_HOME: $ANDROID_HOME"
+echo "GRADLE_HOME: $GRADLE_HOME"
+echo "PATH contains emulator: $(echo $PATH | grep emulator)"
+echo "PATH contains gradle: $(echo $PATH | grep gradle)"
+
+# 验证工具版本
+gradle --version  # 应该显示8.14.2
+adb --version
 ```
 
-**Single Command for Linux:**
-```bash
-# Ensure environment is set up first
-export ANDROID_HOME="$PWD/android-sdk"
-export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
-$ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 4096 -partition-size 6144 -cores 2 -gpu auto -no-boot-anim -no-snapshot-save & sleep 10 && adb wait-for-device
-```
-
-### 3. Build and Deploy (Debug Version)
+### 步骤2: 初始化Android项目 (首次运行必须)
 
 ```bash
-# Navigate to project directory
+# 导航到项目目录
 cd /path/to/your/alouette/project
 
-# Recommended: One-click development mode (build+install+hot reload)
-npm run dev:android
+# 初始化Tauri Android项目 (仅首次需要)
+npm run tauri android init
 
-# Or: Manual debug APK build
-npm run build:android
-
-# Install to device/emulator
-adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-
-# Launch application
-adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
+# 验证初始化结果
+ls -la src-tauri/gen/android/
 ```
 
-### 4. Development Mode (Recommended)
+#### 配置本地Gradle工具 (可选)
+
+如果你想使用本地的Gradle工具而不是Gradle Wrapper (gradlew)，可以进行以下配置：
+
+**方法1: 环境变量配置**
+```bash
+# 设置GRADLE_HOME指向本地Gradle安装目录
+export GRADLE_HOME="/path/to/your/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 验证Gradle版本
+gradle --version
+```
+
+**方法2: 修改tauri.conf.json配置**
+在 `src-tauri/tauri.conf.json` 中添加Android配置：
+
+```json
+{
+  // ...existing config...
+  "android": {
+    "gradle": {
+      "useWrapper": false,
+      "gradlePath": "/path/to/your/gradle-8.14.2/bin/gradle"
+    },
+    "minSdkVersion": 24,
+    "compileSdkVersion": 34,
+    "targetSdkVersion": 34
+  }
+}
+```
+
+**方法3: 项目本地Gradle配置**
+```bash
+# 在项目中使用本地Gradle
+export GRADLE_HOME="$PWD/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 初始化时Tauri会自动检测到本地Gradle
+npm run tauri android init
+
+# 验证配置
+cd src-tauri/gen/android
+gradle wrapper --gradle-version 8.14.2
+```
+
+**方法4: 禁用Wrapper的gradle.properties配置**
+在 `src-tauri/gen/android/gradle.properties` 中添加：
+```properties
+# 使用本地Gradle而不是Wrapper
+org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64
+android.useAndroidX=true
+android.enableJetifier=true
+```
+
+#### 验证本地Gradle配置
 
 ```bash
-# Live development with hot reload
-npm run dev:android
+# 检查Gradle配置
+cd src-tauri/gen/android
 
-# This command automatically:
-# 1. Builds Rust backend
-# 2. Builds Vue frontend  
-# 3. Installs app to connected device/emulator
-# 4. Enables hot reload for frontend code
+# 方式1: 使用本地gradle命令
+gradle -v
+
+# 方式2: 检查gradle wrapper配置
+cat gradle/wrapper/gradle-wrapper.properties
+
+# 方式3: 检查构建是否使用本地gradle
+gradle clean assembleDebug --info | grep "Gradle version"
+```
+
+#### Linux系统推荐配置
+
+对于Linux系统，推荐使用项目本地的Gradle：
+
+```bash
+# 设置本地Gradle环境
+export GRADLE_HOME="$PWD/gradle-8.14.2" 
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 初始化Android项目
+npm run tauri android init
+
+# 验证使用本地Gradle
+cd src-tauri/gen/android
+gradle --version  # 应该显示8.14.2版本
+```
+### 步骤3: 启动Android模拟器
+
+**For macOS:**
+```bash
+# 检查可用AVD
+$ANDROID_HOME/emulator/emulator -list-avds
+
+# 启动模拟器 (ARM64 for Apple Silicon)
+$ANDROID_HOME/emulator/emulator -avd Alouette_ARM64 -memory 4096 -cores 4 -gpu auto -no-snapshot-save &
+
+# 等待设备连接
+adb wait-for-device && adb devices
+```
+
+**For Linux:**
+```bash
+# 检查可用AVD
+$ANDROID_HOME/emulator/emulator -list-avds
+
+# 启动模拟器 (平衡内存设置支持Ollama模型)
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 2048 -partition-size 4096 -cores 2 -gpu swiftshader_indirect -no-boot-anim -no-snapshot-save -no-audio &
+
+# 等待设备连接
+sleep 30 && adb wait-for-device && adb devices
+```
+
+### 步骤4: 编译应用
+
+```bash
+# 方式1: 开发模式 (推荐 - 自动编译+安装+热重载)
+npm run tauri android dev
+
+# 方式2: 手动构建
+npm run tauri android build --debug
+
+# 方式3: 使用package.json中的脚本
+npm run build:android
+```
+
+### 步骤5: 部署到设备
+
+```bash
+# 如果使用开发模式，应用会自动安装
+# 手动安装(如果需要)
+adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
+# 启动应用
+adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
+
+# 查看应用日志
+adb logcat | grep -i alouette
+```
+
+### 快速开发模式 (一键启动)
+
+```bash
+# 确保环境变量已设置且模拟器已启动，然后：
+npm run tauri android dev
+
+# 此命令会自动：
+# 1. 构建Rust后端
+# 2. 构建Vue前端  
+# 3. 安装应用到连接的设备/模拟器
+# 4. 启用前端代码热重载
 ```
 
 ---
 
 ## Troubleshooting
 
+### 执行顺序相关问题
+
+#### 跳过环境变量配置导致的错误
+
+**错误1: emulator命令未找到**
+```
+Error: 找不到命令 "emulator"
+bash: emulator: command not found
+```
+**解决方案**: 必须先配置环境变量
+```bash
+# 步骤1: 设置环境变量 (必须首先执行)
+export ANDROID_HOME="$PWD/android-sdk"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
+
+# 步骤2: 验证环境变量
+echo "ANDROID_HOME: $ANDROID_HOME"
+which emulator || echo "使用完整路径: $ANDROID_HOME/emulator/emulator"
+```
+
+**错误2: 跳过初始化直接编译**
+```
+Error: Error You must run `tauri android init` and add the `[android]` config to be able to use this command
+```
+**解决方案**: 必须先初始化Android项目
+```bash
+# 步骤1: 初始化 (仅首次需要)
+npm run tauri android init
+
+# 步骤2: 验证初始化成功
+ls -la src-tauri/gen/android/
+```
+
+**错误3: 没有连接设备就编译**
+```
+Error: No Android devices found
+Could not find a suitable device
+```
+**解决方案**: 必须先启动模拟器或连接设备
+```bash
+# 步骤1: 启动模拟器
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test &
+
+# 步骤2: 等待设备连接
+adb wait-for-device && adb devices
+
+# 步骤3: 确认设备已连接后再编译
+npm run tauri android dev
+```
+
+**错误4: Gradle Wrapper 下载失败或版本冲突**
+```
+Error: Could not download gradle-8.x.x-bin.zip
+Error: Gradle wrapper did not finish downloading
+```
+**解决方案**: 配置使用本地Gradle工具
+```bash
+# 步骤1: 设置本地Gradle环境
+export GRADLE_HOME="$PWD/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 步骤2: 验证本地Gradle
+gradle --version
+
+# 步骤3: 重新初始化（会使用本地Gradle）
+npm run tauri android init
+
+# 步骤4: 手动配置gradle wrapper（如果需要）
+cd src-tauri/gen/android
+gradle wrapper --gradle-version 8.14.2
+```
+
+**错误5: Gradle版本不兼容**
+```
+Error: Minimum supported Gradle version is X.X. Current version is Y.Y
+```
+**解决方案**: 确保Gradle版本匹配
+```bash
+# 检查项目要求的Gradle版本
+cat src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+
+# 使用匹配的本地Gradle版本
+export GRADLE_HOME="$PWD/gradle-8.14.2"  # 确保版本匹配
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 重新构建
+npm run tauri android build --debug
+```
 ### Common Issues by Platform
 
 #### macOS Issues
@@ -345,11 +571,11 @@ sudo usermod -a -G kvm $USER
 
 #### Ollama Server Setup
 
-**For emulator testing**, Ollama must be accessible from the Android device:
+**For emulator testing**, Ollima must be accessible from the Android device:
 
 ```bash
-# Start Ollama with network access
-OLLAMA_HOST=0.0.0.0:11434 ollama serve
+# Start Ollima with network access
+OLLIMA_HOST=0.0.0.0:11434 ollima serve
 
 # Find your local IP
 ip route get 1.1.1.1 | awk '{print $7; exit}'  # Linux
@@ -375,7 +601,7 @@ All translation attempts now generate detailed logs:
 Android Debug - Starting translation process
 Android Debug - Text: 'Hello world'
 Android Debug - Target languages: ["Chinese"]
-Android Debug - Provider: ollama
+Android Debug - Provider: ollima
 Android Debug - Server URL: http://192.168.1.100:11434
 Android Debug - Model: qwen2.5:1.5b
 ```
@@ -405,7 +631,7 @@ Android Debug - Translation process completed successfully with 1 results
 
 1. **Build latest version** with fixes
 2. **Install to device/emulator**
-3. **Configure Ollama connection** with local IP
+3. **Configure Ollima connection** with local IP
 4. **Test translation** with simple text
 5. **Monitor logs** for detailed debugging information
 
@@ -466,7 +692,7 @@ adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
 
 #### Option 1: Quick Setup with Pre-downloaded Files
 
-If you have downloaded the following files to `/Users/han/Downloads/`:
+If you have downloaded the following files到 `/Users/han/Downloads/`:
 
 - `android-ndk-r28b-darwin.dmg`
 - `platform-tools-latest-darwin.zip`
@@ -635,7 +861,7 @@ npm run build:android -- --bundle aab
 # 1. Environment setup (once per session)
 cd ~/zoo && source android-env.sh  # macOS
 # or
-export ANDROID_HOME="$PWD/android-sdk" && export PATH="$ANDROID_HOME/platform-tools:$PATH"  # Linux
+export ANDROID_HOME="$PWD/android-sdk" && export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"  # Linux
 
 # 2. Start emulator (if not running)
 adb devices
@@ -656,727 +882,1255 @@ adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
 adb logcat | grep -E "(alouette|Alouette|RustStdoutStderr)"
 ```
 
-#### 📋 Quick Command Reference
+### 步骤1: 配置环境变量 (必须首先执行)
 
+**For macOS:**
 ```bash
-# 🔧 Development verification - One-click build+install+launch (recommended)
-npm run dev:android
-
-# 🔧 Manual debug build
-npm run build:android
-
-# 🚀 Release build (production environment)
-npm run build:android -- --release
-
-# 📦 Google Play Bundle
-npm run build:android -- --bundle aab
-
-# 🔄 Reinstall app
-adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-
-# 🚀 Quick restart app
-adb shell am force-stop com.alouette.app && adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
+cd ~/zoo && source android-env.sh
 ```
 
-### Development Workflow
+**For Linux:**
+```bash
+cd /path/to/alouette
+export ANDROID_HOME="$PWD/android-sdk"
+export GRADLE_HOME="$PWD/gradle-8.14.2"  # 使用项目本地Gradle
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$GRADLE_HOME/bin:$PATH"
+
+# 验证环境变量
+echo "ANDROID_HOME: $ANDROID_HOME"
+echo "GRADLE_HOME: $GRADLE_HOME"
+echo "PATH contains emulator: $(echo $PATH | grep emulator)"
+echo "PATH contains gradle: $(echo $PATH | grep gradle)"
+
+# 验证工具版本
+gradle --version  # 应该显示8.14.2
+adb --version
+```
+
+### 步骤2: 初始化Android项目 (首次运行必须)
 
 ```bash
-# Start development server with hot reload
+# 导航到项目目录
+cd /path/to/your/alouette/project
+
+# 初始化Tauri Android项目 (仅首次需要)
+npm run tauri android init
+
+# 验证初始化结果
+ls -la src-tauri/gen/android/
+```
+
+#### 配置本地Gradle工具 (可选)
+
+如果你想使用本地的Gradle工具而不是Gradle Wrapper (gradlew)，可以进行以下配置：
+
+**方法1: 环境变量配置**
+```bash
+# 设置GRADLE_HOME指向本地Gradle安装目录
+export GRADLE_HOME="/path/to/your/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 验证Gradle版本
+gradle --version
+```
+
+**方法2: 修改tauri.conf.json配置**
+在 `src-tauri/tauri.conf.json` 中添加Android配置：
+
+```json
+{
+  // ...existing config...
+  "android": {
+    "gradle": {
+      "useWrapper": false,
+      "gradlePath": "/path/to/your/gradle-8.14.2/bin/gradle"
+    },
+    "minSdkVersion": 24,
+    "compileSdkVersion": 34,
+    "targetSdkVersion": 34
+  }
+}
+```
+
+**方法3: 项目本地Gradle配置**
+```bash
+# 在项目中使用本地Gradle
+export GRADLE_HOME="$PWD/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 初始化时Tauri会自动检测到本地Gradle
+npm run tauri android init
+
+# 验证配置
+cd src-tauri/gen/android
+gradle wrapper --gradle-version 8.14.2
+```
+
+**方法4: 禁用Wrapper的gradle.properties配置**
+在 `src-tauri/gen/android/gradle.properties` 中添加：
+```properties
+# 使用本地Gradle而不是Wrapper
+org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64
+android.useAndroidX=true
+android.enableJetifier=true
+```
+
+#### 验证本地Gradle配置
+
+```bash
+# 检查Gradle配置
+cd src-tauri/gen/android
+
+# 方式1: 使用本地gradle命令
+gradle -v
+
+# 方式2: 检查gradle wrapper配置
+cat gradle/wrapper/gradle-wrapper.properties
+
+# 方式3: 检查构建是否使用本地gradle
+gradle clean assembleDebug --info | grep "Gradle version"
+```
+
+#### Linux系统推荐配置
+
+对于Linux系统，推荐使用项目本地的Gradle：
+
+```bash
+# 设置本地Gradle环境
+export GRADLE_HOME="$PWD/gradle-8.14.2" 
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 初始化Android项目
+npm run tauri android init
+
+# 验证使用本地Gradle
+cd src-tauri/gen/android
+gradle --version  # 应该显示8.14.2版本
+```
+### 步骤3: 启动Android模拟器
+
+**For macOS:**
+```bash
+# 检查可用AVD
+$ANDROID_HOME/emulator/emulator -list-avds
+
+# 启动模拟器 (ARM64 for Apple Silicon)
+$ANDROID_HOME/emulator/emulator -avd Alouette_ARM64 -memory 4096 -cores 4 -gpu auto -no-snapshot-save &
+
+# 等待设备连接
+adb wait-for-device && adb devices
+```
+
+**For Linux:**
+```bash
+# 检查可用AVD
+$ANDROID_HOME/emulator/emulator -list-avds
+
+# 启动模拟器 (平衡内存设置支持Ollama模型)
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 2048 -partition-size 4096 -cores 2 -gpu swiftshader_indirect -no-boot-anim -no-snapshot-save -no-audio &
+
+# 等待设备连接
+sleep 30 && adb wait-for-device && adb devices
+```
+
+### 步骤4: 编译应用
+
+```bash
+# 方式1: 开发模式 (推荐 - 自动编译+安装+热重载)
 npm run tauri android dev
 
-# This will:
-# 1. Build the Rust backend
-# 2. Build the frontend
-# 3. Install the app on connected device/emulator
-# 4. Enable hot reload for frontend changes
+# 方式2: 手动构建
+npm run tauri android build --debug
+
+# 方式3: 使用package.json中的脚本
+npm run build:android
 ```
 
-### Common Development Workflow
-
-Here's a typical development workflow for Alouette Android development:
+### 步骤5: 部署到设备
 
 ```bash
-# 1. Set up environment (once per session)
-cd ~/zoo && source android-env.sh  # macOS
-# OR
-export ANDROID_HOME="$PWD/android-sdk" && export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"  # Linux
+# 如果使用开发模式，应用会自动安装
+# 手动安装(如果需要)
+adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
 
-# 2. Check emulator status
-adb devices
+# 启动应用
+adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
 
-# 3. Start emulator if not running
-if ! adb devices | grep -q emulator; then
-    echo "Starting emulator..."
-    $ANDROID_HOME/emulator/emulator -avd Alouette_Test \
-        -no-snapshot-save \
-        -memory 4096 \
-        -partition-size 8192 \
-        -no-boot-anim \
-        -gpu auto &
-    adb wait-for-device
-fi
+# 查看应用日志
+adb logcat | grep -i alouette
+```
 
-# 4. Navigate to project and build
+### 快速开发模式 (一键启动)
+
+```bash
+# 确保环境变量已设置且模拟器已启动，然后：
+npm run tauri android dev
+
+# 此命令会自动：
+# 1. 构建Rust后端
+# 2. 构建Vue前端  
+# 3. 安装应用到连接的设备/模拟器
+# 4. 启用前端代码热重载
+```
+
+---
+
+## Troubleshooting
+
+### 执行顺序相关问题
+
+#### 跳过环境变量配置导致的错误
+
+**错误1: emulator命令未找到**
+```
+Error: 找不到命令 "emulator"
+bash: emulator: command not found
+```
+**解决方案**: 必须先配置环境变量
+```bash
+# 步骤1: 设置环境变量 (必须首先执行)
+export ANDROID_HOME="$PWD/android-sdk"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
+
+# 步骤2: 验证环境变量
+echo "ANDROID_HOME: $ANDROID_HOME"
+which emulator || echo "使用完整路径: $ANDROID_HOME/emulator/emulator"
+```
+
+**错误2: 跳过初始化直接编译**
+```
+Error: Error You must run `tauri android init` and add the `[android]` config to be able to use this command
+```
+**解决方案**: 必须先初始化Android项目
+```bash
+# 步骤1: 初始化 (仅首次需要)
+npm run tauri android init
+
+# 步骤2: 验证初始化成功
+ls -la src-tauri/gen/android/
+```
+
+**错误3: 没有连接设备就编译**
+```
+Error: No Android devices found
+Could not find a suitable device
+```
+**解决方案**: 必须先启动模拟器或连接设备
+```bash
+# 步骤1: 启动模拟器
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test &
+
+# 步骤2: 等待设备连接
+adb wait-for-device && adb devices
+
+# 步骤3: 确认设备已连接后再编译
+npm run tauri android dev
+```
+
+**错误4: Gradle Wrapper 下载失败或版本冲突**
+```
+Error: Could not download gradle-8.x.x-bin.zip
+Error: Gradle wrapper did not finish downloading
+```
+**解决方案**: 配置使用本地Gradle工具
+```bash
+# 步骤1: 设置本地Gradle环境
+export GRADLE_HOME="$PWD/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 步骤2: 验证本地Gradle
+gradle --version
+
+# 步骤3: 重新初始化（会使用本地Gradle）
+npm run tauri android init
+
+# 步骤4: 手动配置gradle wrapper（如果需要）
+cd src-tauri/gen/android
+gradle wrapper --gradle-version 8.14.2
+```
+
+**错误5: Gradle版本不兼容**
+```
+Error: Minimum supported Gradle version is X.X. Current version is Y.Y
+```
+**解决方案**: 确保Gradle版本匹配
+```bash
+# 检查项目要求的Gradle版本
+cat src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+
+# 使用匹配的本地Gradle版本
+export GRADLE_HOME="$PWD/gradle-8.14.2"  # 确保版本匹配
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 重新构建
+npm run tauri android build --debug
+```
+### Common Issues by Platform
+
+#### macOS Issues
+
+**QEMU Panic Error**
+```
+Error: PANIC: Avd's CPU Architecture 'x86_64' is not supported by the QEMU2 emulator on aarch64 host
+```
+**Solution**: Use ARM64 system images only
+```bash
+# ✅ Correct for Apple Silicon
+avdmanager create avd -k "system-images;android-34;google_apis_playstore;arm64-v8a"
+
+# ❌ Wrong for Apple Silicon  
+avdmanager create avd -k "system-images;android-34;google_apis_playstore;x86_64"
+```
+
+**OpenSSL Compilation Error**
+```
+Error: /bin/sh: aarch64-linux-android-ranlib: command not found
+```
+**Solution**: Create missing symlink
+```bash
+cd $NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin
+ln -s llvm-ranlib aarch64-linux-android-ranlib
+```
+
+#### Linux Issues
+
+**Emulator Command Not Found**
+```
+Error: 找不到命令 "emulator"，但可以通过以下软件包安装它：
+sudo apt install google-android-emulator-installer
+```
+**Solution**: Use full path to emulator binary and set up environment correctly
+```bash
+# Step 1: Verify emulator exists in Android SDK
+ls -la $ANDROID_HOME/emulator/emulator
+
+# Step 2: Always use full path or ensure PATH is set
+export ANDROID_HOME="$PWD/android-sdk"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
+
+# Step 3: Use full path for reliable execution
+$ANDROID_HOME/emulator/emulator -list-avds
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test [other-options]
+
+# Step 4: Verify emulator is accessible
+which emulator || echo "Use full path: $ANDROID_HOME/emulator/emulator"
+```
+
+**ADB Binary Detection**
+```
+Error: Could not automatically detect an ADB binary
+```
+**Solution**: Set proper permissions and PATH
+```bash
+chmod +x $ANDROID_HOME/platform-tools/adb
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+```
+
+**Platform-tools Version Issue**
+```
+Symptom: adb version shows "minimal" without full functionality
+```
+**Solution**: Ensure complete platform-tools installation
+```bash
+# Check current adb version
+adb version
+
+# If output shows "minimal", reinstall platform-tools
+cd $ANDROID_HOME
+wget https://dl.google.com/android/repository/platform-tools-latest-linux.zip
+rm -rf platform-tools
+unzip platform-tools-latest-linux.zip
+rm platform-tools-latest-linux.zip
+
+# Verify installation
+adb version  # Should show complete version (e.g., 35.0.2)
+```
+
+**Emulator Permission Denied**
+```
+Error: /dev/kvm permission denied
+```
+**Solution**: Add user to kvm group
+```bash
+sudo usermod -a -G kvm $USER
+# Logout and login again
+```
+
+### Network Configuration
+
+#### Ollima Server Setup
+
+**For emulator testing**, Ollima must be accessible from the Android device:
+
+```bash
+# Start Ollima with network access
+OLLIMA_HOST=0.0.0.0:11434 ollima serve
+
+# Find your local IP
+ip route get 1.1.1.1 | awk '{print $7; exit}'  # Linux
+ifconfig | grep "inet " | grep -v 127.0.0.1     # macOS
+```
+
+**In Alouette app settings:**
+- Server URL: `http://YOUR_LOCAL_IP:11434`
+- Model: Select available model (e.g., `qwen2.5:1.5b`)
+
+---
+
+## Translation Feature Debugging
+
+### Enhanced Error Handling (Fixed)
+
+The translation functionality now includes comprehensive error handling:
+
+#### Debug Logging
+All translation attempts now generate detailed logs:
+
+```
+Android Debug - Starting translation process
+Android Debug - Text: 'Hello world'
+Android Debug - Target languages: ["Chinese"]
+Android Debug - Provider: ollima
+Android Debug - Server URL: http://192.168.1.100:11434
+Android Debug - Model: qwen2.5:1.5b
+```
+
+#### Error Categories
+
+1. **Network Errors**: Connection refused, timeouts
+2. **Validation Errors**: Empty text, missing configuration
+3. **Response Errors**: Empty responses, JSON parse failures
+4. **Model Errors**: Model not found, insufficient resources
+
+#### Monitoring Logs
+
+**Android device logs:**
+```bash
+adb logcat | grep -E "(Android Debug|Alouette|RustStdoutStderr)"
+```
+
+**Expected successful output:**
+```
+Android Debug - Final translation result: '你好世界'
+Android Debug - Successfully translated to Chinese: '你好世界'
+Android Debug - Translation process completed successfully with 1 results
+```
+
+### Verification Steps
+
+1. **Build latest version** with fixes
+2. **Install to device/emulator**
+3. **Configure Ollima connection** with local IP
+4. **Test translation** with simple text
+5. **Monitor logs** for detailed debugging information
+
+---
+
+## Build Environment Details
+
+### Verified Configurations
+
+#### macOS Apple Silicon
+- **OS**: macOS Sonoma (M3)
+- **NDK**: r28b  
+- **API Level**: 34 (Android 14)
+- **Target**: `aarch64-linux-android`
+- **Emulator**: ARM64 system images
+
+#### Linux x86_64
+- **OS**: Ubuntu 20.04+
+- **NDK**: r28b
+- **API Level**: 34 (Android 14)  
+- **Target**: `x86_64-linux-android`
+- **Emulator**: x86_64 system images
+
+### Performance Metrics
+- **APK Size**: ~726MB (debug build)
+- **Launch Time**: <3 seconds
+- **Memory Usage**: 4-6GB during build
+- **Build Time**: 10-15 minutes (first build)
+
+---
+
+**Last Updated**: June 17, 2025  
+**Status**: All major issues resolved ✅
+$ANDROID_HOME/emulator/emulator -avd Alouette_ARM64 -no-snapshot-save &
+
+# 3. Wait for emulator to boot
+adb wait-for-device
+
+# 4. Navigate to your project and build
 cd /path/to/your/alouette/project
 npm run tauri android build
 
 # 5. Install and run
-adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
-
-# 6. Monitor logs
-adb logcat | grep -E "(alouette|Alouette|RustStdoutStderr)"
-```
-
-### One-liner Commands for Quick Testing
-
-```bash
-# Quick reinstall and launch
-adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk && adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
-
-# Force stop and restart app
-adb shell am force-stop com.alouette.app && adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
-
-# Check if app is running
-adb shell ps | grep alouette
-
-# Get app version
-adb shell dumpsys package com.alouette.app | grep versionName
-```
-
----
-
-## Android Feature Verification Process
-
-### 🎯 Quick Verification Checklist (Debug Build Priority)
-
-When verifying Android functionality, **only use debug builds** and follow these steps:
-
-#### 1. Environment Check
-
-```bash
-# Check Android environment
-echo "Android SDK: $ANDROID_HOME"
-echo "ADB Version:"
-adb --version
-
-# Check device connection
-adb devices
-```
-
-#### 2. Emulator Management
-
-```bash
-# List available AVDs
-$ANDROID_HOME/emulator/emulator -list-avds
-
-# Start emulator (if not running)
-$ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 4096 -cores 2 -gpu auto &
-
-# Wait for device ready
-adb wait-for-device && echo "Device connected"
-```
-
-#### 3. Build and Install Debug Version
-
-```bash
-# Enter project directory
-cd /home/hanl5/coding/alouette  # or your project path
-
-# Method 1: Recommended - Development mode (auto build+install+hot reload)
-npm run dev:android
-
-# Method 2: Manual debug build
-npm run build:android
-adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-```
-
-#### 4. Feature Verification Checkpoints
-
-```bash
-# Launch application
-adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
-
-# View application logs
-adb logcat | grep -E "(alouette|Alouette|RustStdoutStderr)"
-
-# Check application status
-adb shell ps | grep alouette
-
-# Verify functionality:
-# ✅ Application starts normally
-# ✅ UI interface displays completely
-# ✅ Translation feature available
-# ✅ Network connection normal (Ollama)
-# ✅ Audio playback functionality
-```
-
-#### 5. Troubleshooting Commands
-
-```bash
-# Restart app when crashed
-adb shell am force-stop com.alouette.app
-adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
-
-# Reinstall application
-adb uninstall com.alouette.app
 adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-
-# View device information
-adb shell getprop ro.build.version.release  # Android version
-adb shell getprop ro.product.cpu.abi        # CPU architecture
-adb shell df /data                          # Storage space
-```
-
-### ⚠️ Important Notes
-
-- ✅ **Prioritize debug builds** - Auto-signed, can be installed directly
-- ❌ **Avoid release builds** - Unsigned, cannot be installed directly, only for production
-- 🔄 **Use `npm run dev:android`** - Fastest verification method
-- 📱 **Verify core functions** - Translation, TTS, network connection
-- 🐛 **Keep logs** - Use `adb logcat` to monitor issues
-
----
-
-## Environment Configuration
-
-### For macOS (Using ~/zoo setup)
-
-Load the Android environment:
-
-```bash
-# Navigate to your zoo directory
-cd ~/zoo
-
-# Load environment variables
-source android-env.sh
-
-# Verify environment
-echo "ANDROID_HOME: $ANDROID_HOME"
-echo "NDK_HOME: $NDK_HOME"
-echo "Java: $(java -version 2>&1 | head -1)"
-```
-
-### For Linux
-
-Configure environment variables for Android development:
-
-```bash
-export ANDROID_HOME="$PWD/android-sdk"
-export NDK_HOME="$ANDROID_HOME/ndk/android-ndk-r28b"
-export GRADLE_HOME="$PWD/gradle-8.14.2"
-export JAVA_HOME="/usr/lib/jvm/java-21-openjdk-amd64"
-
-export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$NDK_HOME:$GRADLE_HOME/bin:$PATH"
-
-echo "Android SDK: $ANDROID_HOME"
-echo "NDK: $NDK_HOME"
-echo "Gradle: $GRADLE_HOME"
-echo "Java: $JAVA_HOME"
-```
-
-## Supported Target Architectures
-
-| Architecture              | Target Platform | Usage                               |
-| ------------------------- | --------------- | ----------------------------------- |
-| `aarch64-linux-android`   | ARM64           | Modern Android devices (mainstream) |
-| `armv7-linux-androideabi` | ARM32           | Legacy Android devices              |
-| `i686-linux-android`      | x86             | Android emulator                    |
-| `x86_64-linux-android`    | x86_64          | High-performance emulator/devices   |
-
-## Build Output
-
-After successful build, you will get the following files:
-
-### APK Files (for development/testing)
-
-```
-src-tauri/gen/android/app/build/outputs/apk/universal/release/
-├── app-universal-release-unsigned.apk  # Unsigned APK
-└── output-metadata.json                # Build metadata
-```
-
-### AAB Files (for Google Play Store)
-
-```
-src-tauri/gen/android/app/build/outputs/bundle/universalRelease/
-└── app-universal-release.aab           # Play Store package
-```
-
-## Testing and Deployment
-
-### Setting up Android Emulator
-
-#### For macOS (~/zoo setup)
-
-Create and start an Android Virtual Device (AVD):
-
-```bash
-# Load environment first
-cd ~/zoo && source android-env.sh
-
-# Create AVD (Android Virtual Device) - if not already created
-avdmanager create avd \
-  -n "Alouette_Test" \
-  -k "system-images;android-34;google_apis_playstore;x86_64" \
-  -d "pixel_7"
-
-# Start emulator with optimized memory settings
-$ANDROID_HOME/emulator/emulator -avd Alouette_Test \
-  -no-snapshot-save \
-  -memory 4096 \
-  -partition-size 8192 \
-  -no-boot-anim \
-  -gpu auto &
-
-# Wait for device to be ready
-adb wait-for-device
-
-# Verify device is connected
-adb devices
-```
-
-#### For Linux
-
-Create and start an Android Virtual Device (AVD):
-
-```bash
-# Set up environment variables first
-export ANDROID_HOME="$PWD/android-sdk"
-export NDK_HOME="$ANDROID_HOME/ndk/android-ndk-r28b"
-export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
-
-# Create AVD (Android Virtual Device)
-avdmanager create avd \
-  -n "Alouette_Test" \
-  -k "system-images;android-34;google_apis_playstore;x86_64" \
-  -d "pixel_7"
-
-# Start emulator with optimized settings for better performance
-$ANDROID_HOME/emulator/emulator -avd Alouette_Test \
-  -no-snapshot-save \
-  -memory 4096 \
-  -partition-size 8192 \
-  -no-boot-anim \
-  -gpu auto &
-
-# Wait for device to be ready
-adb wait-for-device
-```
-
-### Installing the Application
-
-Install and run the application on emulator:
-
-```bash
-# Make sure environment is loaded (for macOS)
-cd ~/zoo && source android-env.sh
-
-# Navigate to your Alouette project
-cd /path/to/your/alouette/project
-
-# Build the Android APK
-npm run tauri android build
-
-# Install debug APK (use -r flag for reinstall/update)
-adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-
-# Launch application
 adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
-
-# View application logs in real-time
-adb logcat | grep -E "(alouette|Alouette|RustStdoutStderr)"
 ```
 
-### Quick Installation Script
+## ⚠️ Apple Silicon Mac Specific Requirements
 
-For faster development workflow, create this installation script:
+**IMPORTANT**: On Apple Silicon Macs, you MUST use ARM64 system images for the Android emulator. x86_64 images will not work and will show a QEMU panic error.
 
-```bash
-#!/bin/bash
-# save as install-alouette.sh
+**Correct system image**: `system-images;android-34;google_apis_playstore;arm64-v8a`  
+**Incorrect**: `system-images;android-34;google_apis_playstore;x86_64` ❌
 
-# Load environment (macOS)
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    cd ~/zoo && source android-env.sh
-fi
-
-# Navigate to project (update this path)
-cd /path/to/your/alouette/project
-
-# Build and install
-echo "Building Alouette for Android..."
-npm run tauri android build
-
-if [ $? -eq 0 ]; then
-    echo "Installing APK..."
-    adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-    
-    echo "Launching application..."
-    adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
-    
-    echo "Showing logs (Ctrl+C to stop)..."
-    adb logcat | grep -E "(alouette|Alouette|RustStdoutStderr)"
-else
-    echo "Build failed!"
-    exit 1
-fi
-```
-
-Make it executable:
-```bash
-chmod +x install-alouette.sh
-./install-alouette.sh
-```
-
-### Installing on Physical Device
-
-To install on a real Android device:
-
-```bash
-# After enabling Developer Mode and USB Debugging
-adb devices
-
-# Install APK
-adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
-
-# List installed packages
-adb shell pm list packages | grep alouette
-```
-
-## Monitoring and Debugging
-
-### Real-time Application Monitoring
-
-Monitor application performance and logs:
-
-```bash
-# Monitor application logs in real-time
-adb logcat | grep -E "(alouette|Alouette|RustStdoutStderr)"
-
-# Monitor with specific tags
-adb logcat -s "AlouetteApp"
-
-# Clear log buffer and monitor fresh logs
-adb logcat -c && adb logcat | grep -E "(alouette|Alouette)"
-
-# Monitor application performance
-adb shell top | grep alouette
-
-# Check memory usage
-adb shell dumpsys meminfo com.alouette.app
-
-# Check CPU usage
-adb shell dumpsys cpuinfo | grep alouette
-
-# Monitor network connections
-adb shell netstat | grep 11434  # Check Ollama connections
-```
-
-### Debugging Commands
-
-```bash
-# Get detailed application information
-adb shell dumpsys package com.alouette.app
-
-# Check application permissions
-adb shell dumpsys package com.alouette.app | grep permission
-
-# Monitor file system access
-adb shell strace -p $(adb shell pidof com.alouette.app) 2>&1 | grep -E "(open|read|write)"
-
-# Check application crashes
-adb logcat -b crash
-
-# Debug native crashes
-adb logcat -b main -b system -b crash | grep -E "(FATAL|AndroidRuntime|DEBUG)"
-```
-
-### Network Debugging for Ollama Connection
-
-```bash
-# Test network connectivity from emulator to host
-adb shell ping -c 3 192.168.31.228  # Replace with your host IP
-
-# Test Ollama API from emulator
-adb shell "echo 'GET /api/tags HTTP/1.1\r\nHost: 192.168.31.228:11434\r\n\r\n' | nc 192.168.31.228 11434"
-
-# Check if port 11434 is accessible
-adb shell nc -zv 192.168.31.228 11434
-
-# Monitor HTTP requests from the app
-adb logcat | grep -E "(http|HTTP|curl|request|response)"
-```
-
-## Environment Verification
+## Prerequisites
 
 ### For macOS
 
-Verify your development environment setup:
+#### Option 1: Quick Setup with Pre-downloaded Files
+
+If you have downloaded the following files到 `/Users/han/Downloads/`:
+
+- `android-ndk-r28b-darwin.dmg`
+- `platform-tools-latest-darwin.zip`
+
+Run the automated setup:
 
 ```bash
-# Load environment
-cd ~/zoo && source android-env.sh
+# Create development directory
+mkdir -p ~/zoo && cd ~/zoo
 
-# Complete environment check
-echo "=== Environment Verification ==="
-echo "Node.js: $(node --version)"
-echo "Rust: $(rustc --version)"
-echo "Java: $(java -version 2>&1 | head -1)"
-echo "Android SDK: $ANDROID_HOME"
-echo "NDK: $NDK_HOME"
+# Mount and extract NDK
+hdiutil attach /Users/han/Downloads/android-ndk-r28b-darwin.dmg
+cp -R "/Volumes/Android NDK r28b 1/AndroidNDK13356709.app/Contents/NDK/" ./android-ndk-r28b
+hdiutil detach "/Volumes/Android NDK r28b 1"
 
-echo "=== Android Target Architectures ==="
-rustup target list --installed | grep android
+# Extract Platform Tools
+unzip /Users/han/Downloads/platform-tools-latest-darwin.zip
 
-echo "=== Tool Availability ==="
-command -v adb && echo "✅ ADB available" || echo "❌ ADB not available"
-command -v sdkmanager && echo "✅ SDK Manager available" || echo "❌ SDK Manager not available"
-command -v avdmanager && echo "✅ AVD Manager available" || echo "❌ AVD Manager not available"
-command -v emulator && echo "✅ Emulator available" || echo "❌ Emulator not available"
+# Create Android SDK directory
+mkdir -p android-sdk/cmdline-tools
+
+# Download and setup Android SDK Command Line Tools
+curl -o commandlinetools-mac.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
+unzip commandlinetools-mac.zip -d android-sdk/cmdline-tools/
+mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
+
+# Setup environment variables with NDK toolchain fixes
+cat > android-env.sh << 'EOF'
+#!/bin/bash
+# Android Development Environment Setup for macOS (Apple Silicon)
+
+export ANDROID_HOME="$HOME/zoo/android-sdk"
+export ANDROID_SDK_ROOT="$HOME/zoo/android-sdk"
+export NDK_HOME="$HOME/zoo/android-ndk-r28b"
+export PATH="$HOME/zoo/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin:$PATH"
+
+echo "Android Environment Variables Set:"
+echo "ANDROID_HOME: $ANDROID_HOME"
+echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+echo "NDK_HOME: $NDK_HOME"
+echo "PATH updated with Android tools and NDK toolchain"
+EOF
+
+chmod +x android-env.sh
+source android-env.sh
+
+# Fix missing ranlib tool for OpenSSL compilation
+cd $NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin/
+ln -sf llvm-ranlib aarch64-linux-android-ranlib
+ln -sf llvm-ar aarch64-linux-android-ar
+ln -sf llvm-strip aarch64-linux-android-strip
+
+# Install required Android SDK components (ARM64 for Apple Silicon)
+yes | sdkmanager --licenses
+sdkmanager "platforms;android-34" "build-tools;34.0.0" "emulator" "system-images;android-34;google_apis_playstore;arm64-v8a"
+
+# Create ARM64 Android Virtual Device (compatible with Apple Silicon)
+avdmanager create avd -n "Alouette_ARM64" -k "system-images;android-34;google_apis_playstore;arm64-v8a" -d "pixel_7"
+```
+
+#### Option 2: Manual Installation
+
+Install essential build tools and Java development kit:
+
+```bash
+# Install Homebrew if not already installed
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install required tools
+brew install openjdk@21 wget unzip curl
+
+# Add Java to PATH
+echo 'export PATH="/opt/homebrew/opt/openjdk@21/bin:$PATH"' >> ~/.zshrc
+echo 'export JAVA_HOME="/opt/homebrew/opt/openjdk@21"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
 ### For Linux
 
-Verify your development environment setup:
+Install essential build tools and Java development kit:
 
 ```bash
-# Complete environment check
-echo "=== Environment Verification ==="
-echo "Node.js: $(node --version)"
-echo "Rust: $(rustc --version)"
-echo "Java: $(java -version 2>&1 | head -1)"
-echo "Gradle: $(gradle --version | head -1)"
-echo "Android SDK: $ANDROID_HOME"
-echo "NDK: $NDK_HOME"
-
-echo "=== Android Target Architectures ==="
-rustup target list --installed | grep android
-
-echo "=== Tool Availability ==="
-command -v adb && echo "✅ ADB available" || echo "❌ ADB not available"
-command -v gradle && echo "✅ Gradle available" || echo "❌ Gradle not available"
+sudo apt update && sudo apt install -y \
+  clang llvm build-essential \
+  openjdk-21-jdk \
+  wget unzip curl
 ```
+
+### Add Rust Android Targets
+
+Add Android targets for Rust compilation:
+
+```bash
+rustup target add \
+  aarch64-linux-android \
+  armv7-linux-androideabi \
+  i686-linux-android \
+  x86_64-linux-android
+
+rustup target list --installed | grep android
+```
+
+### Initialize Tauri Android Project
+
+Set up the Android project structure:
+
+```bash
+# Navigate to your Alouette project
+cd /path/to/your/alouette/project
+
+# Initialize Android support (if not already done)
+npx @tauri-apps/cli android init
+
+# Install dependencies
+npm install
+```
+
+## Building the Application
+
+### Build for Android
+
+#### 📱 Debug vs Release Build Guide
+
+**Important Note**: For daily development and verification, we **only use debug builds**, unless deploying to app stores.
+
+#### 🔧 Debug Build (Recommended for Development)
+
+Debug APKs have the following characteristics:
+- ✅ **Auto-signed** - Uses debug certificate, can be installed directly
+- ✅ **Fast build** - Shorter compilation time
+- ✅ **Development tools** - Includes debug info and logging
+- ✅ **Hot reload** - Supports live updates in development mode
+- ❌ **Larger file** - Includes debug symbols, APK ~726MB
+
+```bash
+# Build debug APK (recommended)
+npm run dev:android
+
+# Or manually build debug version
+npm run build:android
+```
+
+**Output path**: `src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`
+
+#### 🚀 Release Build (Production Only)
+
+Release APKs have the following characteristics:
+- ❌ **Requires signing** - Generates unsigned APK, cannot be installed directly
+- ⚡ **Optimized build** - Code optimization, better performance
+- 📦 **Smaller file** - Debug info removed, APK ~120MB
+- 🔒 **Production ready** - Suitable for app store deployment
+
+```bash
+# Build release APK (requires subsequent signing)
+npm run build:android -- --release
+
+# Build AAB bundle (Google Play Store)
+npm run build:android -- --bundle aab
+```
+
+**Output path**: `src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk`
+
+#### 🛠️ Verification and Testing Workflow
+
+```bash
+# 1. Environment setup (once per session)
+cd ~/zoo && source android-env.sh  # macOS
+# or
+export ANDROID_HOME="$PWD/android-sdk" && export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"  # Linux
+
+# 2. Start emulator (if not running)
+adb devices
+# If no device, start emulator
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 4096 -cores 2 -gpu auto &
+
+# 3. Build and install debug version (recommended)
+cd /path/to/your/alouette/project
+npm run dev:android
+
+# 4. Manual debug installation (if needed)
+adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
+# 5. Launch application
+adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
+
+# 6. View logs
+adb logcat | grep -E "(alouette|Alouette|RustStdoutStderr)"
+```
+
+### 步骤1: 配置环境变量 (必须首先执行)
+
+**For macOS:**
+```bash
+cd ~/zoo && source android-env.sh
+```
+
+**For Linux:**
+```bash
+cd /path/to/alouette
+export ANDROID_HOME="$PWD/android-sdk"
+export GRADLE_HOME="$PWD/gradle-8.14.2"  # 使用项目本地Gradle
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$GRADLE_HOME/bin:$PATH"
+
+# 验证环境变量
+echo "ANDROID_HOME: $ANDROID_HOME"
+echo "GRADLE_HOME: $GRADLE_HOME"
+echo "PATH contains emulator: $(echo $PATH | grep emulator)"
+echo "PATH contains gradle: $(echo $PATH | grep gradle)"
+
+# 验证工具版本
+gradle --version  # 应该显示8.14.2
+adb --version
+```
+
+### 步骤2: 初始化Android项目 (首次运行必须)
+
+```bash
+# 导航到项目目录
+cd /path/to/your/alouette/project
+
+# 初始化Tauri Android项目 (仅首次需要)
+npm run tauri android init
+
+# 验证初始化结果
+ls -la src-tauri/gen/android/
+```
+
+#### 配置本地Gradle工具 (可选)
+
+如果你想使用本地的Gradle工具而不是Gradle Wrapper (gradlew)，可以进行以下配置：
+
+**方法1: 环境变量配置**
+```bash
+# 设置GRADLE_HOME指向本地Gradle安装目录
+export GRADLE_HOME="/path/to/your/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 验证Gradle版本
+gradle --version
+```
+
+**方法2: 修改tauri.conf.json配置**
+在 `src-tauri/tauri.conf.json` 中添加Android配置：
+
+```json
+{
+  // ...existing config...
+  "android": {
+    "gradle": {
+      "useWrapper": false,
+      "gradlePath": "/path/to/your/gradle-8.14.2/bin/gradle"
+    },
+    "minSdkVersion": 24,
+    "compileSdkVersion": 34,
+    "targetSdkVersion": 34
+  }
+}
+```
+
+**方法3: 项目本地Gradle配置**
+```bash
+# 在项目中使用本地Gradle
+export GRADLE_HOME="$PWD/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 初始化时Tauri会自动检测到本地Gradle
+npm run tauri android init
+
+# 验证配置
+cd src-tauri/gen/android
+gradle wrapper --gradle-version 8.14.2
+```
+
+**方法4: 禁用Wrapper的gradle.properties配置**
+在 `src-tauri/gen/android/gradle.properties` 中添加：
+```properties
+# 使用本地Gradle而不是Wrapper
+org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64
+android.useAndroidX=true
+android.enableJetifier=true
+```
+
+#### 验证本地Gradle配置
+
+```bash
+# 检查Gradle配置
+cd src-tauri/gen/android
+
+# 方式1: 使用本地gradle命令
+gradle -v
+
+# 方式2: 检查gradle wrapper配置
+cat gradle/wrapper/gradle-wrapper.properties
+
+# 方式3: 检查构建是否使用本地gradle
+gradle clean assembleDebug --info | grep "Gradle version"
+```
+
+#### Linux系统推荐配置
+
+对于Linux系统，推荐使用项目本地的Gradle：
+
+```bash
+# 设置本地Gradle环境
+export GRADLE_HOME="$PWD/gradle-8.14.2" 
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 初始化Android项目
+npm run tauri android init
+
+# 验证使用本地Gradle
+cd src-tauri/gen/android
+gradle --version  # 应该显示8.14.2版本
+```
+### 步骤3: 启动Android模拟器
+
+**For macOS:**
+```bash
+# 检查可用AVD
+$ANDROID_HOME/emulator/emulator -list-avds
+
+# 启动模拟器 (ARM64 for Apple Silicon)
+$ANDROID_HOME/emulator/emulator -avd Alouette_ARM64 -memory 4096 -cores 4 -gpu auto -no-snapshot-save &
+
+# 等待设备连接
+adb wait-for-device && adb devices
+```
+
+**For Linux:**
+```bash
+# 检查可用AVD
+$ANDROID_HOME/emulator/emulator -list-avds
+
+# 启动模拟器 (平衡内存设置支持Ollama模型)
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 2048 -partition-size 4096 -cores 2 -gpu swiftshader_indirect -no-boot-anim -no-snapshot-save -no-audio &
+
+# 等待设备连接
+sleep 30 && adb wait-for-device && adb devices
+```
+
+### 步骤4: 编译应用
+
+```bash
+# 方式1: 开发模式 (推荐 - 自动编译+安装+热重载)
+npm run tauri android dev
+
+# 方式2: 手动构建
+npm run tauri android build --debug
+
+# 方式3: 使用package.json中的脚本
+npm run build:android
+```
+
+### 步骤5: 部署到设备
+
+```bash
+# 如果使用开发模式，应用会自动安装
+# 手动安装(如果需要)
+adb install -r src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
+# 启动应用
+adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
+
+# 查看应用日志
+adb logcat | grep -i alouette
+```
+
+### 快速开发模式 (一键启动)
+
+```bash
+# 确保环境变量已设置且模拟器已启动，然后：
+npm run tauri android dev
+
+# 此命令会自动：
+# 1. 构建Rust后端
+# 2. 构建Vue前端  
+# 3. 安装应用到连接的设备/模拟器
+# 4. 启用前端代码热重载
+```
+
+---
 
 ## Troubleshooting
 
-Common issues and solutions:
+### 执行顺序相关问题
 
-### macOS Specific Issues
+#### 跳过环境变量配置导致的错误
 
-1. **Permission denied on DMG mounting**:
+**错误1: emulator命令未找到**
+```
+Error: 找不到命令 "emulator"
+bash: emulator: command not found
+```
+**解决方案**: 必须先配置环境变量
+```bash
+# 步骤1: 设置环境变量 (必须首先执行)
+export ANDROID_HOME="$PWD/android-sdk"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
 
-   ```bash
-   # Allow unsigned applications in System Preferences > Security & Privacy
-   sudo spctl --master-disable
-   ```
+# 步骤2: 验证环境变量
+echo "ANDROID_HOME: $ANDROID_HOME"
+which emulator || echo "使用完整路径: $ANDROID_HOME/emulator/emulator"
+```
 
-2. **Emulator fails to start**:
+**错误2: 跳过初始化直接编译**
+```
+Error: Error You must run `tauri android init` and add the `[android]` config to be able to use this command
+```
+**解决方案**: 必须先初始化Android项目
+```bash
+# 步骤1: 初始化 (仅首次需要)
+npm run tauri android init
 
-   ```bash
-   # Check if HAXM is installed (Intel Macs) or enable hardware acceleration
-   # For Apple Silicon Macs, ensure you're using arm64 system images
-   ```
+# 步骤2: 验证初始化成功
+ls -la src-tauri/gen/android/
+```
 
-3. **Environment variables not persisting**:
-   ```bash
-   # Add to your shell profile
-   echo 'source ~/zoo/android-env.sh' >> ~/.zshrc
-   ```
+**错误3: 没有连接设备就编译**
+```
+Error: No Android devices found
+Could not find a suitable device
+```
+**解决方案**: 必须先启动模拟器或连接设备
+```bash
+# 步骤1: 启动模拟器
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test &
 
-### Linux Specific Issues
+# 步骤2: 等待设备连接
+adb wait-for-device && adb devices
 
-1. **ADB binary not detected popup in emulator**:
-   ```bash
-   # Issue: Emulator can't automatically find ADB binary
-   # Solution: Manually start ADB server with full path
-   cd /path/to/your/project
-   export ANDROID_HOME="$PWD/android-sdk"
-   export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
-   $ANDROID_HOME/platform-tools/adb start-server
-   $ANDROID_HOME/platform-tools/adb devices  # Verify connection
-   ```
+# 步骤3: 确认设备已连接后再编译
+npm run tauri android dev
+```
 
-2. **Emulator startup with safe memory allocation**:
-   ```bash
-   # Use balanced memory settings to prevent system crashes
-   $ANDROID_HOME/emulator/emulator -avd Alouette_Test -no-snapshot-save -memory 4096 -partition-size 6144 -cores 2 -no-boot-anim -gpu auto &
-   ```
+**错误4: Gradle Wrapper 下载失败或版本冲突**
+```
+Error: Could not download gradle-8.x.x-bin.zip
+Error: Gradle wrapper did not finish downloading
+```
+**解决方案**: 配置使用本地Gradle工具
+```bash
+# 步骤1: 设置本地Gradle环境
+export GRADLE_HOME="$PWD/gradle-8.14.2"
+export PATH="$GRADLE_HOME/bin:$PATH"
 
-3. **Multiple emulator instances error**:
-   ```bash
-   # If getting "Running multiple emulators with the same AVD" error
-   # First kill existing instances
-   pkill -f "emulator.*Alouette_Test"
-   # Wait a moment, then restart
-   sleep 2
-   $ANDROID_HOME/emulator/emulator -avd Alouette_Test -no-snapshot-save -memory 4096 -partition-size 6144 -cores 2 -no-boot-anim -gpu auto &
-   ```
+# 步骤2: 验证本地Gradle
+gradle --version
 
-### Quick Debug Commands
+# 步骤3: 重新初始化（会使用本地Gradle）
+npm run tauri android init
+
+# 步骤4: 手动配置gradle wrapper（如果需要）
+cd src-tauri/gen/android
+gradle wrapper --gradle-version 8.14.2
+```
+
+**错误5: Gradle版本不兼容**
+```
+Error: Minimum supported Gradle version is X.X. Current version is Y.Y
+```
+**解决方案**: 确保Gradle版本匹配
+```bash
+# 检查项目要求的Gradle版本
+cat src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties
+
+# 使用匹配的本地Gradle版本
+export GRADLE_HOME="$PWD/gradle-8.14.2"  # 确保版本匹配
+export PATH="$GRADLE_HOME/bin:$PATH"
+
+# 重新构建
+npm run tauri android build --debug
+```
+### Common Issues by Platform
+
+#### macOS Issues
+
+**QEMU Panic Error**
+```
+Error: PANIC: Avd's CPU Architecture 'x86_64' is not supported by the QEMU2 emulator on aarch64 host
+```
+**Solution**: Use ARM64 system images only
+```bash
+# ✅ Correct for Apple Silicon
+avdmanager create avd -k "system-images;android-34;google_apis_playstore;arm64-v8a"
+
+# ❌ Wrong for Apple Silicon  
+avdmanager create avd -k "system-images;android-34;google_apis_playstore;x86_64"
+```
+
+**OpenSSL Compilation Error**
+```
+Error: /bin/sh: aarch64-linux-android-ranlib: command not found
+```
+**Solution**: Create missing symlink
+```bash
+cd $NDK_HOME/toolchains/llvm/prebuilt/darwin-x86_64/bin
+ln -s llvm-ranlib aarch64-linux-android-ranlib
+```
+
+#### Linux Issues
+
+**Emulator Command Not Found**
+```
+Error: 找不到命令 "emulator"，但可以通过以下软件包安装它：
+sudo apt install google-android-emulator-installer
+```
+**Solution**: Use full path to emulator binary and set up environment correctly
+```bash
+# Step 1: Verify emulator exists in Android SDK
+ls -la $ANDROID_HOME/emulator/emulator
+
+# Step 2: Always use full path or ensure PATH is set
+export ANDROID_HOME="$PWD/android-sdk"
+export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
+
+# Step 3: Use full path for reliable execution
+$ANDROID_HOME/emulator/emulator -list-avds
+$ANDROID_HOME/emulator/emulator -avd Alouette_Test [other-options]
+
+# Step 4: Verify emulator is accessible
+which emulator || echo "Use full path: $ANDROID_HOME/emulator/emulator"
+```
+
+**ADB Binary Detection**
+```
+Error: Could not automatically detect an ADB binary
+```
+**Solution**: Set proper permissions and PATH
+```bash
+chmod +x $ANDROID_HOME/platform-tools/adb
+export PATH="$ANDROID_HOME/platform-tools:$PATH"
+```
+
+**Platform-tools Version Issue**
+```
+Symptom: adb version shows "minimal" without full functionality
+```
+**Solution**: Ensure complete platform-tools installation
+```bash
+# Check current adb version
+adb version
+
+# If output shows "minimal", reinstall platform-tools
+cd $ANDROID_HOME
+wget https://dl.google.com/android/repository/platform-tools-latest-linux.zip
+rm -rf platform-tools
+unzip platform-tools-latest-linux.zip
+rm platform-tools-latest-linux.zip
+
+# Verify installation
+adb version  # Should show complete version (e.g., 35.0.2)
+```
+
+**Emulator Permission Denied**
+```
+Error: /dev/kvm permission denied
+```
+**Solution**: Add user to kvm group
+```bash
+sudo usermod -a -G kvm $USER
+# Logout and login again
+```
+
+### Network Configuration
+
+#### Ollama Server Setup
+
+**For emulator testing**, Ollama must be accessible from the Android device:
 
 ```bash
-# Check connected devices
-adb devices -l
+# Start Ollama with network access
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
 
-# Restart ADB server
-adb kill-server && adb start-server
+# Find your local IP
+ip route get 1.1.1.1 | awk '{print $7; exit}'  # Linux
+ifconfig | grep "inet " | grep -v 127.0.0.1     # macOS
+```
 
-# Check emulator status
-emulator -list-avds
+**In Alouette app settings:**
+- Server URL: `http://YOUR_LOCAL_IP:11434`
+- Model: Select available model (e.g., `qwen2.5:1.5b`)
 
-# Check running emulators
-adb devices
+---
 
-# Force stop and restart emulator (Apple Silicon)
-adb emu kill
+## Translation Feature Debugging
+
+### Enhanced Error Handling (Fixed)
+
+The translation functionality now includes comprehensive error handling:
+
+#### Debug Logging
+All translation attempts now generate detailed logs:
+
+```
+Android Debug - Starting translation process
+Android Debug - Text: 'Hello world'
+Android Debug - Target languages: ["Chinese"]
+Android Debug - Provider: ollima
+Android Debug - Server URL: http://192.168.1.100:11434
+Android Debug - Model: qwen2.5:1.5b
+```
+
+#### Error Categories
+
+1. **Network Errors**: Connection refused, timeouts
+2. **Validation Errors**: Empty text, missing configuration
+3. **Response Errors**: Empty responses, JSON parse failures
+4. **Model Errors**: Model not found, insufficient resources
+
+#### Monitoring Logs
+
+**Android device logs:**
+```bash
+adb logcat | grep -E "(Android Debug|Alouette|RustStdoutStderr)"
+```
+
+**Expected successful output:**
+```
+Android Debug - Final translation result: '你好世界'
+Android Debug - Successfully translated to Chinese: '你好世界'
+Android Debug - Translation process completed successfully with 1 results
+```
+
+### Verification Steps
+
+1. **Build latest version** with fixes
+2. **Install to device/emulator**
+3. **Configure Ollama connection** with local IP
+4. **Test translation** with simple text
+5. **Monitor logs** for detailed debugging information
+
+---
+
+## Build Environment Details
+
+### Verified Configurations
+
+#### macOS Apple Silicon
+- **OS**: macOS Sonoma (M3)
+- **NDK**: r28b  
+- **API Level**: 34 (Android 14)
+- **Target**: `aarch64-linux-android`
+- **Emulator**: ARM64 system images
+
+#### Linux x86_64
+- **OS**: Ubuntu 20.04+
+- **NDK**: r28b
+- **API Level**: 34 (Android 14)  
+- **Target**: `x86_64-linux-android`
+- **Emulator**: x86_64 system images
+
+### Performance Metrics
+- **APK Size**: ~726MB (debug build)
+- **Launch Time**: <3 seconds
+- **Memory Usage**: 4-6GB during build
+- **Build Time**: 10-15 minutes (first build)
+
+---
+
+**Last Updated**: June 17, 2025  
+**Status**: All major issues resolved ✅
 $ANDROID_HOME/emulator/emulator -avd Alouette_ARM64 -no-snapshot-save &
 
-# Check emulator system info
-adb shell getprop ro.build.version.release  # Android version
-adb shell getprop ro.product.cpu.abi        # CPU architecture
-adb shell getprop ro.build.characteristics  # Device type
+# 3. Wait for emulator to boot
+adb wait-for-device
 
-# Monitor emulator resource usage
-adb shell cat /proc/meminfo | head -5       # Memory info
-adb shell cat /proc/cpuinfo | grep "model name" | head -1  # CPU info
+# 4. Navigate to your project and build
+cd /path/to/your/alouette/project
+npm run tauri android build
+
+# 5. Install and run
+adb install src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+adb shell am start -n com.alouette.app/com.alouette.app.MainActivity
 ```
 
-### Emulator Troubleshooting
+## ⚠️ Apple Silicon Mac Specific Requirements
+
+**IMPORTANT**: On Apple Silicon Macs, you MUST use ARM64 system images for the Android emulator. x86_64 images will not work and will show a QEMU panic error.
+
+**Correct system image**: `system-images;android-34;google_apis_playstore;arm64-v8a`  
+**Incorrect**: `system-images;android-34;google_apis_playstore;x86_64` ❌
+
+## Prerequisites
+
+### For macOS
+
+#### Option 1: Quick Setup with Pre-downloaded Files
+
+If you have downloaded the following files到 `/Users/han/Downloads/`:
+
+- `android-ndk-r28b-darwin.dmg`
+- `platform-tools-latest-darwin.zip`
+
+Run the automated setup:
 
 ```bash
-# If emulator won't start
-emulator -avd Alouette_Test -verbose  # Start with verbose logging
+# Create development directory
+mkdir -p ~/zoo && cd ~/zoo
 
-# If emulator is slow
-emulator -avd Alouette_Test -gpu auto -no-boot-anim -memory 4096
+# Mount and extract NDK
+hdiutil attach /Users/han/Downloads/android-ndk-r28b-darwin.dmg
+cp -R "/Volumes/Android NDK r28b 1/AndroidNDK13356709.app/Contents/NDK/" ./android-ndk-r28b
+hdiutil detach "/Volumes/Android NDK r28b 1"
 
-# If emulator crashes
-emulator -avd Alouette_Test -no-snapshot-load  # Cold boot
+# Extract Platform Tools
+unzip /Users/han/Downloads/platform-tools-latest-darwin.zip
 
-# Reset emulator to factory state
-emulator -avd Alouette_Test -wipe-data
+# Create Android SDK directory
+mkdir -p android-sdk/cmdline-tools
 
-# Check emulator skin/resolution
-emulator -avd Alouette_Test -skin 1080x1920
-```
+# Download and setup Android SDK Command Line Tools
+curl -o commandlinetools-mac.zip https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip
+unzip commandlinetools-mac.zip -d android-sdk/cmdline-tools/
+mv android-sdk/cmdline-tools/cmdline-tools android-sdk/cmdline-tools/latest
 
-### Application Debugging
+# Setup environment variables with NDK toolchain fixes
+cat > android-env.sh << 'EOF'
+#!/bin/bash
+# Android Development Environment Setup for macOS (Apple Silicon)
 
-```bash
-# Clear app data
-adb shell pm clear com.alouette.app
-
-# Check app installation status
-adb shell pm list packages -f | grep alouette
-
-# Get detailed app info
-adb shell dumpsys package com.alouette.app | grep -E "(versionCode|versionName|targetSdkVersion)"
-
-# Monitor app startup time
-adb shell am start -W -n com.alouette.app/com.alouette.app.MainActivity
-
-# Check app permissions
-adb shell dumpsys package com.alouette.app | grep -A 20 "requested permissions"
-```
+export ANDROID_HOME="$HOME/zoo/android-sdk"
+export ANDROID_SDK_ROOT="$HOME/zoo/android-sdk"
+export NDK_HOME="$HOME/zoo
 
 ---
 
-## 🎯 Best Practices Summary
+## 🧹 Code Maintenance Log
 
-### Memory Configuration Guidelines
+### December 2024 - TTSEngine Dead Code Cleanup ✅
 
-**Critical Memory Settings for Linux Systems:**
+**Task**: Remove all dead code warnings from TTSEngine module  
+**Status**: **COMPLETED** - Zero compilation warnings
 
-| System RAM | Recommended Emulator Memory | Max Safe Memory | Partition Size |
-|------------|---------------------------|-----------------|----------------|
-| 8GB        | 2048MB (2GB)             | 3072MB (3GB)    | 4096MB (4GB)   |
-| 16GB       | 4096MB (4GB)             | 4096MB (4GB)    | 6144MB (6GB)   |
-| 32GB+      | 4096MB (4GB)             | 6144MB (6GB)    | 8192MB (8GB)   |
+#### Cleaned Functions Removed:
+- Cache management functions (ensure_cache_dir, generate_cache_key, etc.)
+- Voice selection utilities (select_voice_for_language)
+- Text processing functions (detect_text_script, safe_truncate, etc.)
+- Audio file validation utilities  
+- Unused TTS engine integrations (Edge TTS, local TTS)
 
-**⚠️ Critical Warnings:**
-- **Never exceed 4GB** emulator memory on systems with 16GB RAM or less
-- **Never exceed 6GB** emulator memory even on high-end systems
-- Exceeding these limits can cause **system-wide crashes** and **VS Code OOM-kill**
-
-### Recommended Emulator Command
+#### Result:
+- **Clean build**: No dead code warnings for Android target
+- **Code reduced**: Removed 200+ lines of unused functions
+- **Maintained functionality**: All active TTS features preserved
+- **Better maintainability**: Clean separation of Android/non-Android code
 
 ```bash
-# Safe and stable emulator configuration (Linux)
-$ANDROID_HOME/emulator/emulator -avd Alouette_Test \
-  -memory 2048 \
-  -partition-size 4096 \
-  -cores 2 \
-  -gpu swiftshader_indirect \
-  -no-boot-anim \
-  -no-snapshot-save &
+# Verification: Clean compilation
+cd src-tauri && cargo build --target aarch64-linux-android
+# Result: Zero warnings, clean build output
 ```
 
-### Quick Development Workflow
-
-1. **Set environment** (once per session):
-   ```bash
-   export ANDROID_HOME="$PWD/android-sdk"
-   export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$PATH"
-   ```
-
-2. **Start emulator** (safe configuration):
-   ```bash
-   $ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 2048 -cores 2 -gpu swiftshader_indirect &
-   sleep 20 && adb wait-for-device
-   ```
-
-3. **Build and test** (debug mode):
-   ```bash
-   npm run dev:android
-   ```
-
-4. **Monitor logs**:
-   ```bash
-   adb logcat | grep -E "(alouette|Alouette|translation|Translation)"
-   ```
-
-### 🚨 Emulator Crash Recovery
-
-If the emulator crashes repeatedly:
-
-1. **Check system memory**:
-   ```bash
-   free -h
-   ```
-
-2. **Kill all emulator processes**:
-   ```bash
-   pkill -f emulator
-   ```
-
-3. **Clear emulator cache**:
-   ```bash
-   rm -rf ~/.android/avd/Alouette_Test.avd/snapshots/
-   ```
-
-4. **Restart with minimal settings**:
-   ```bash
-   $ANDROID_HOME/emulator/emulator -avd Alouette_Test -memory 1024 -gpu swiftshader_indirect -no-audio &
-   ```
-
-### Troubleshooting Crashes (Updated June 18, 2025)
-
-#### Symptoms
-- Emulator window disappears suddenly
-- No device in `adb devices`
-- High memory usage in system monitor
-
-#### Solutions
-1. **Reduce memory allocation**: Max 2GB on Linux
-2. **Use software rendering**: `-gpu swiftshader_indirect`
-3. **Disable snapshots**: `-no-snapshot-save`
-4. **Monitor system resources**: `htop` or `free -h`
-5. **Restart VS Code** if OOM-killed
-
----
-
-**Last Updated**: June 18, 2025  
-**Memory Configuration**: Updated to prevent system crashes ✅  
-**Crash Recovery**: Added troubleshooting steps ✅  
-**Status**: All major issues resolved ✅

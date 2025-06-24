@@ -81,4 +81,4 @@ android-sdk/
 gradle-8.14.2/
 src-tauri/Cargo.lock
 *log
-alouette-kotlin/composeApp/.gradle/
+gen/
