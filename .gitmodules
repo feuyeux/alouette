@@ -1,0 +1,9 @@
+[submodule "alouette-app"]
+	path = alouette-app
+	url = git@github.com:feuyeux/alouette-app.git
+[submodule "alouette-translator"]
+	path = alouette-translator
+	url = git@github.com:feuyeux/alouette-translator.git
+[submodule "alouette-tts"]
+	path = alouette-tts
+	url = git@github.com:feuyeux/alouette-tts.git
