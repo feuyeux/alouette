@@ -41,6 +41,10 @@ build/
 **/android/key.properties
 *.jks
 
+# Build reports
+**/build/reports/
+problems-report.html
+
 # iOS
 **/ios/build/
 **/ios/.symlinks/
