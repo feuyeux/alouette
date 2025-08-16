@@ -74,12 +74,13 @@ class PlatformDetector implements IPlatformDetector {
   /// Fallback method to detect Edge TTS availability without platform channels
   Future<bool> _fallbackEdgeTTSDetection() async {
     try {
-      // For now, assume Edge TTS is available on desktop platforms
+      // For now, disable Edge TTS to avoid command line issues
+      // and use Flutter TTS which is more stable
       // In a real implementation, this could check for:
       // - edge-tts Python package installation
       // - Network connectivity to Microsoft's TTS service
       // - Required system dependencies
-      return isDesktopPlatform();
+      return false; // Temporarily disable Edge TTS
     } catch (e) {
       return false;
     }

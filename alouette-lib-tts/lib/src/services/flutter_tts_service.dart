@@ -63,8 +63,9 @@ class FlutterTTSService implements ITTSService {
       _voiceMapper = VoiceMapper(_platformDetector.getCurrentPlatform());
 
       // Initialize platform audio manager
-      _audioManager =
-          PlatformAudioManager.create(_platformDetector.getCurrentPlatform());
+      _audioManager = PlatformAudioManager.create(
+        _platformDetector.getCurrentPlatform(),
+      );
       await _audioManager.initialize(_config);
 
       // Initialize platform-specific settings
@@ -106,8 +107,9 @@ class FlutterTTSService implements ITTSService {
       await _audioManager.prepareForSynthesis();
 
       // Validate text length
-      final maxLength = _platformDetector
-              .getPlatformCapabilities()['maxTextLength'] as int? ??
+      final maxLength =
+          _platformDetector.getPlatformCapabilities()['maxTextLength']
+              as int? ??
           4000;
       if (text.length > maxLength) {
         throw TTSSynthesisException(
@@ -123,8 +125,10 @@ class FlutterTTSService implements ITTSService {
         _state = TTSState.playing;
       } else {
         _state = TTSState.error;
-        throw TTSSynthesisException('Failed to start speech synthesis',
-            text: text);
+        throw TTSSynthesisException(
+          'Failed to start speech synthesis',
+          text: text,
+        );
       }
     } catch (e) {
       _state = TTSState.error;
@@ -163,8 +167,10 @@ class FlutterTTSService implements ITTSService {
 
       // Validate SSML
       if (!_isValidSSML(ssml)) {
-        throw TTSSynthesisException('Invalid SSML markup',
-            text: ssml.substring(0, 50) + '...');
+        throw TTSSynthesisException(
+          'Invalid SSML markup',
+          text: ssml.substring(0, 50) + '...',
+        );
       }
 
       // Use SSML speak method if available
@@ -174,8 +180,10 @@ class FlutterTTSService implements ITTSService {
         _state = TTSState.playing;
       } else {
         _state = TTSState.error;
-        throw TTSSynthesisException('Failed to start SSML synthesis',
-            text: ssml);
+        throw TTSSynthesisException(
+          'Failed to start SSML synthesis',
+          text: ssml,
+        );
       }
     } catch (e) {
       _state = TTSState.error;
@@ -189,8 +197,10 @@ class FlutterTTSService implements ITTSService {
   }
 
   @override
-  Future<Uint8List> synthesizeToAudio(String text,
-      {AlouetteTTSConfig? config}) async {
+  Future<Uint8List> synthesizeToAudio(
+    String text, {
+    AlouetteTTSConfig? config,
+  }) async {
     if (_state == TTSState.disposed) {
       throw TTSException('TTS service has been disposed');
     }
@@ -228,21 +238,27 @@ class FlutterTTSService implements ITTSService {
         final result = await _flutterTts.speak(text);
 
         if (result != 1) {
-          throw TTSSynthesisException('Failed to start audio synthesis',
-              text: text);
+          throw TTSSynthesisException(
+            'Failed to start audio synthesis',
+            text: text,
+          );
         }
 
         // Wait for audio capture to complete
         await _waitForAudioCapture();
 
         if (_capturedAudio == null) {
-          throw TTSSynthesisException('Failed to capture synthesized audio',
-              text: text);
+          throw TTSSynthesisException(
+            'Failed to capture synthesized audio',
+            text: text,
+          );
         }
 
         // Validate and convert audio format if needed
-        final audioData =
-            await _processAudioData(_capturedAudio!, effectiveConfig);
+        final audioData = await _processAudioData(
+          _capturedAudio!,
+          effectiveConfig,
+        );
 
         _state = TTSState.ready;
         return audioData;
@@ -421,8 +437,9 @@ class FlutterTTSService implements ITTSService {
       final format = _config.audioFormat;
 
       // Validate that the format is supported on this platform
-      if (!format
-          .isSupportedOnPlatform(_platformDetector.getCurrentPlatform().name)) {
+      if (!format.isSupportedOnPlatform(
+        _platformDetector.getCurrentPlatform().name,
+      )) {
         throw TTSPlatformException(
           'Audio format ${format.formatName} is not supported on ${_platformDetector.getCurrentPlatform().name}',
           _platformDetector.getCurrentPlatform(),
@@ -438,11 +455,7 @@ class FlutterTTSService implements ITTSService {
         validateFormat: false, // Skip format validation for mobile platforms
       );
 
-      final result = await AudioSaver.save(
-        audioData,
-        filePath,
-        options,
-      );
+      final result = await AudioSaver.save(audioData, filePath, options);
 
       if (!result.success) {
         throw TTSException('Failed to save audio file: ${result.error}');
@@ -474,19 +487,16 @@ class FlutterTTSService implements ITTSService {
     try {
       // Validate format support on current platform
       final format = options.format ?? _config.audioFormat;
-      if (!format
-          .isSupportedOnPlatform(_platformDetector.getCurrentPlatform().name)) {
+      if (!format.isSupportedOnPlatform(
+        _platformDetector.getCurrentPlatform().name,
+      )) {
         throw TTSPlatformException(
           'Audio format ${format.formatName} is not supported on ${_platformDetector.getCurrentPlatform().name}',
           _platformDetector.getCurrentPlatform(),
         );
       }
 
-      return await AudioSaver.save(
-        audioData,
-        filePath,
-        options,
-      );
+      return await AudioSaver.save(audioData, filePath, options);
     } catch (e) {
       if (e is TTSException) {
         rethrow;
@@ -578,8 +588,9 @@ class FlutterTTSService implements ITTSService {
       await _flutterTts.setSharedInstance(true);
 
       // Configure audio session for Android
-      final androidConfig = _config.platformSpecific['androidAudioAttributes']
-          as Map<String, dynamic>?;
+      final androidConfig =
+          _config.platformSpecific['androidAudioAttributes']
+              as Map<String, dynamic>?;
       if (androidConfig != null) {
         await _audioManager.configureAudioSession(androidConfig);
       }
@@ -622,31 +633,43 @@ class FlutterTTSService implements ITTSService {
   /// Set up Flutter TTS callbacks
   Future<void> _setupCallbacks() async {
     _flutterTts.setStartHandler(() {
-      _state = TTSState.playing;
-      _onStart?.call();
+      // Ensure callback runs on main thread
+      Future.microtask(() {
+        _state = TTSState.playing;
+        _onStart?.call();
+      });
     });
 
     _flutterTts.setCompletionHandler(() {
-      _state = TTSState.ready;
-      _onComplete?.call();
+      // Ensure callback runs on main thread
+      Future.microtask(() {
+        _state = TTSState.ready;
+        _onComplete?.call();
 
-      // Handle audio capture completion
-      if (_isCapturingAudio) {
-        _isCapturingAudio = false;
-      }
+        // Handle audio capture completion
+        if (_isCapturingAudio) {
+          _isCapturingAudio = false;
+        }
+      });
     });
 
     _flutterTts.setErrorHandler((msg) {
-      _state = TTSState.error;
-      _onError?.call(msg);
+      // Ensure callback runs on main thread
+      Future.microtask(() {
+        _state = TTSState.error;
+        _onError?.call(msg);
 
-      if (_isCapturingAudio) {
-        _isCapturingAudio = false;
-      }
+        if (_isCapturingAudio) {
+          _isCapturingAudio = false;
+        }
+      });
     });
 
     _flutterTts.setPauseHandler(() {
-      _state = TTSState.paused;
+      // Ensure callback runs on main thread
+      Future.microtask(() {
+        _state = TTSState.paused;
+      });
     });
 
     _flutterTts.setContinueHandler(() {
@@ -779,14 +802,18 @@ class FlutterTTSService implements ITTSService {
     }
 
     if (attempts >= maxAttempts) {
-      throw TTSSynthesisException('Audio capture timeout',
-          text: 'audio_capture');
+      throw TTSSynthesisException(
+        'Audio capture timeout',
+        text: 'audio_capture',
+      );
     }
   }
 
   /// Synthesizes audio using native platform capabilities
   Future<Uint8List> _synthesizeToFileNative(
-      String text, AlouetteTTSConfig config) async {
+    String text,
+    AlouetteTTSConfig config,
+  ) async {
     // This would use platform-specific synthesis-to-file methods
     // For now, we'll use the fallback method
     throw TTSPlatformException(
@@ -797,7 +824,9 @@ class FlutterTTSService implements ITTSService {
 
   /// Processes captured audio data and converts format if needed
   Future<Uint8List> _processAudioData(
-      Uint8List audioData, AlouetteTTSConfig config) async {
+    Uint8List audioData,
+    AlouetteTTSConfig config,
+  ) async {
     // Detect current format
     final detectedFormat = AudioFormatConverter.detectAudioFormat(audioData);
     final targetFormat = config.audioFormat;
@@ -840,8 +869,9 @@ class FlutterTTSService implements ITTSService {
           }
           break;
         case TTSPlatform.ios:
-          final iosConfig = config.platformSpecific['iosAudioSession']
-              as Map<String, dynamic>?;
+          final iosConfig =
+              config.platformSpecific['iosAudioSession']
+                  as Map<String, dynamic>?;
           if (iosConfig != null) {
             await _audioManager.configureAudioSession(iosConfig);
           }

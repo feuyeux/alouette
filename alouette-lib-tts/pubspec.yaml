@@ -1,4 +1,4 @@
-name: alouette_tts
+name: alouette_lib_tts
 description: A TTS library that provides consistent text-to-speech functionality across all major platforms.
 version: 1.0.0
 

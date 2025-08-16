@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:async';
+import 'dart:math' as math;
 
 import '../interfaces/i_tts_service.dart';
 import '../utils/audio_file_manager.dart';
@@ -121,8 +122,10 @@ class EdgeTTSService implements ITTSService {
       final effectiveConfig = config ?? _config;
 
       // Process SSML and synthesize
-      final processedSSML =
-          EdgeTTSSSMLGenerator.processSSML(ssml, effectiveConfig);
+      final processedSSML = EdgeTTSSSMLGenerator.processSSML(
+        ssml,
+        effectiveConfig,
+      );
       final audioData = await _synthesizeSSML(processedSSML, effectiveConfig);
 
       // Simulate playback
@@ -142,8 +145,10 @@ class EdgeTTSService implements ITTSService {
   }
 
   @override
-  Future<Uint8List> synthesizeToAudio(String text,
-      {AlouetteTTSConfig? config}) async {
+  Future<Uint8List> synthesizeToAudio(
+    String text, {
+    AlouetteTTSConfig? config,
+  }) async {
     if (_state == TTSState.disposed) {
       throw TTSException('TTS service has been disposed');
     }
@@ -257,8 +262,12 @@ class EdgeTTSService implements ITTSService {
     if (_voiceCache == null || _voiceDiscovery == null) {
       final allVoices = await getAvailableVoices();
       return allVoices
-          .where((voice) => EdgeTTSVoiceSelector.isVoiceCompatible(
-              voice, AlouetteTTSConfig(languageCode: languageCode)))
+          .where(
+            (voice) => EdgeTTSVoiceSelector.isVoiceCompatible(
+              voice,
+              AlouetteTTSConfig(languageCode: languageCode),
+            ),
+          )
           .toList();
     }
 
@@ -271,8 +280,10 @@ class EdgeTTSService implements ITTSService {
 
     // Get all voices and filter by language
     final allVoices = await getAvailableVoices();
-    final languageVoices =
-        _voiceDiscovery!.filterByLanguage(allVoices, languageCode);
+    final languageVoices = _voiceDiscovery!.filterByLanguage(
+      allVoices,
+      languageCode,
+    );
     final sortedVoices = _voiceDiscovery!.sortByPreference(languageVoices);
 
     // Cache the filtered results
@@ -297,11 +308,7 @@ class EdgeTTSService implements ITTSService {
         validateFormat: true,
       );
 
-      final result = await AudioSaver.save(
-        audioData,
-        filePath,
-        options,
-      );
+      final result = await AudioSaver.save(audioData, filePath, options);
 
       if (!result.success) {
         throw TTSException('Failed to save audio file: ${result.error}');
@@ -355,11 +362,7 @@ class EdgeTTSService implements ITTSService {
     }
 
     try {
-      final result = await AudioSaver.save(
-        audioData,
-        filePath,
-        options,
-      );
+      final result = await AudioSaver.save(audioData, filePath, options);
 
       // Log operation for performance monitoring
       _performanceMonitor?.recordFileOperation(
@@ -471,14 +474,23 @@ class EdgeTTSService implements ITTSService {
 
   /// Synthesizes SSML using WebSocket client with command-line fallback
   Future<Uint8List> _synthesizeSSML(
-      String ssml, AlouetteTTSConfig config) async {
+    String ssml,
+    AlouetteTTSConfig config,
+  ) async {
     final stopwatch = Stopwatch()..start();
     final textLength = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml).length;
+
+    print('DEBUG: Starting synthesis for language: ${config.languageCode}');
+    print('DEBUG: Text length: $textLength');
+    print(
+      'DEBUG: SSML preview: ${ssml.substring(0, math.min(200, ssml.length))}...',
+    );
 
     try {
       // Try WebSocket first
       if (_wsClient != null) {
         try {
+          print('DEBUG: Attempting WebSocket synthesis...');
           final result = await _wsClient!.synthesize(ssml, config);
 
           // Record successful synthesis
@@ -489,11 +501,15 @@ class EdgeTTSService implements ITTSService {
             metadata: {'method': 'websocket'},
           );
 
+          print('DEBUG: WebSocket synthesis successful');
           return result;
         } catch (e) {
+          print('DEBUG: WebSocket synthesis failed: $e');
+
           // If WebSocket fails and command-line is available, try fallback
           if (_useCommandLineFallback && _cmdClient != null) {
             try {
+              print('DEBUG: Attempting command-line fallback...');
               // Extract text from SSML for command-line client
               final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
               final result = await _cmdClient!.synthesize(text, config);
@@ -506,8 +522,11 @@ class EdgeTTSService implements ITTSService {
                 metadata: {'method': 'command_line_fallback'},
               );
 
+              print('DEBUG: Command-line fallback successful');
               return result;
             } catch (fallbackError) {
+              print('DEBUG: Command-line fallback also failed: $fallbackError');
+
               // Record failure
               _performanceMonitor?.recordSynthesis(
                 duration: stopwatch.elapsed,
@@ -518,8 +537,10 @@ class EdgeTTSService implements ITTSService {
 
               // If both fail, throw the original WebSocket error
               if (e is TTSException) rethrow;
-              throw TTSSynthesisException('Failed to synthesize SSML: $e',
-                  text: ssml);
+              throw TTSSynthesisException(
+                'Failed to synthesize SSML: $e',
+                text: ssml,
+              );
             }
           }
 
@@ -533,8 +554,10 @@ class EdgeTTSService implements ITTSService {
 
           // No fallback available, rethrow original error
           if (e is TTSException) rethrow;
-          throw TTSSynthesisException('Failed to synthesize SSML: $e',
-              text: ssml);
+          throw TTSSynthesisException(
+            'Failed to synthesize SSML: $e',
+            text: ssml,
+          );
         }
       }
 
@@ -564,8 +587,9 @@ class EdgeTTSService implements ITTSService {
 
           if (e is TTSException) rethrow;
           throw TTSSynthesisException(
-              'Failed to synthesize using command-line: $e',
-              text: ssml);
+            'Failed to synthesize using command-line: $e',
+            text: ssml,
+          );
         }
       }
 
@@ -578,8 +602,9 @@ class EdgeTTSService implements ITTSService {
       );
 
       throw TTSInitializationException(
-          'No EdgeTTS client available (neither WebSocket nor command-line)',
-          'desktop');
+        'No EdgeTTS client available (neither WebSocket nor command-line)',
+        'desktop',
+      );
     } finally {
       stopwatch.stop();
     }

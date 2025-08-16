@@ -7,7 +7,6 @@ import 'models/alouette_voice.dart';
 import 'models/tts_request.dart';
 import 'models/tts_result.dart';
 import 'models/tts_state.dart';
-import 'di/service_locator.dart';
 import 'exceptions/tts_exception.dart';
 import 'utils/text_preprocessor.dart';
 import 'utils/ssml_validator.dart';
@@ -15,6 +14,8 @@ import 'utils/audio_file_manager.dart';
 import 'utils/audio_saver.dart';
 import 'services/edge_tts_service.dart';
 import 'services/flutter_tts_service.dart';
+import 'platform/platform_detector.dart';
+import 'factory/tts_factory.dart';
 import 'enums/tts_platform.dart';
 import 'enums/audio_format.dart';
 
@@ -23,27 +24,28 @@ import 'enums/audio_format.dart';
 class AlouetteTTSService implements ITTSService {
   /// The underlying platform-specific TTS service
   ITTSService? _underlyingService;
-  
+
   /// Current configuration
   AlouetteTTSConfig _config = AlouetteTTSConfig.defaultConfig();
-  
+
   /// Current state
   TTSState _state = TTSState.stopped;
-  
+
   /// Whether the service has been initialized
   bool _isInitialized = false;
 
   /// Optional factory for dependency injection (mainly for testing)
   final ITTSFactory? _factory;
 
-  /// Optional platform detector for dependency injection (mainly for testing)
-  final IPlatformDetector? _platformDetector;
+  /// Platform detector for dependency injection
+  late final IPlatformDetector _platformDetector;
 
   /// Creates a new Alouette TTS service instance
   AlouetteTTSService({
     ITTSFactory? factory,
     IPlatformDetector? platformDetector,
-  }) : _factory = factory, _platformDetector = platformDetector;
+  }) : _factory = factory,
+       _platformDetector = platformDetector ?? PlatformDetector();
 
   @override
   Future<void> initialize({
@@ -61,15 +63,16 @@ class AlouetteTTSService implements ITTSService {
 
     try {
       // Get the platform-specific TTS service from the factory
-      if (_factory != null) {
+      final factory = _factory;
+      if (factory != null) {
         // Use injected factory (mainly for testing)
-        _underlyingService = await _factory!.createTTSService();
+        _underlyingService = await factory.createTTSService();
       } else {
-        // Use service locator for production
-        await ServiceLocator.ensureReady();
-        _underlyingService = ServiceLocator.ttsService;
+        // Create services directly without service locator for now
+        final ttsFactory = TTSFactory(_platformDetector);
+        _underlyingService = await ttsFactory.createTTSService();
       }
-      
+
       // Initialize the underlying service
       await _underlyingService!.initialize(
         onStart: () {
@@ -105,32 +108,29 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<void> speak(String text, {AlouetteTTSConfig? config}) async {
     _ensureInitialized();
-    
+
     try {
       _state = TTSState.synthesizing;
-      
+
       // Get current platform for preprocessing
-      final platformDetector = _platformDetector ?? ServiceLocator.platformDetector;
-      final platform = platformDetector.getCurrentPlatform();
-      
+      final platform = _platformDetector.getCurrentPlatform();
+
       // Update config if provided
       if (config != null) {
         await _underlyingService!.updateConfig(config);
       }
-      
+
       // Validate text is not empty first
       if (text.trim().isEmpty) {
-        throw const TTSSynthesisException(
-          'Text cannot be empty',
-          text: '',
-        );
+        throw const TTSSynthesisException('Text cannot be empty', text: '');
       }
 
       // Handle long text by splitting into chunks first, then preprocess each chunk
       final textChunks = TextPreprocessor.splitTextIntoChunks(text, platform);
-      final processedChunks = textChunks.map((chunk) => 
-        _preprocessTextChunk(chunk, config, platform)).toList();
-      
+      final processedChunks = textChunks
+          .map((chunk) => _preprocessTextChunk(chunk, config, platform))
+          .toList();
+
       if (processedChunks.length == 1) {
         // Single chunk - process normally
         await _underlyingService!.speak(processedChunks.first, config: config);
@@ -151,22 +151,21 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<void> speakSSML(String ssml, {AlouetteTTSConfig? config}) async {
     _ensureInitialized();
-    
+
     try {
       _state = TTSState.synthesizing;
-      
+
       // Get current platform for SSML validation
-      final platformDetector = _platformDetector ?? ServiceLocator.platformDetector;
-      final platform = platformDetector.getCurrentPlatform();
-      
+      final platform = _platformDetector.getCurrentPlatform();
+
       // Validate and process SSML
       final processedSSML = _validateAndProcessSSML(ssml, platform, config);
-      
+
       // Update config if provided
       if (config != null) {
         await _underlyingService!.updateConfig(config);
       }
-      
+
       // Check if platform supports SSML
       if (!_platformSupportsSSML(platform)) {
         // Extract text and use regular speak method
@@ -174,7 +173,7 @@ class AlouetteTTSService implements ITTSService {
         await speak(plainText, config: config);
         return;
       }
-      
+
       await _underlyingService!.speakSSML(processedSSML, config: config);
     } catch (e) {
       _state = TTSState.error;
@@ -187,18 +186,24 @@ class AlouetteTTSService implements ITTSService {
   }
 
   @override
-  Future<Uint8List> synthesizeToAudio(String text, {AlouetteTTSConfig? config}) async {
+  Future<Uint8List> synthesizeToAudio(
+    String text, {
+    AlouetteTTSConfig? config,
+  }) async {
     _ensureInitialized();
-    
+
     try {
       _state = TTSState.synthesizing;
-      
+
       // Update config if provided
       if (config != null) {
         await _underlyingService!.updateConfig(config);
       }
-      
-      final audioData = await _underlyingService!.synthesizeToAudio(text, config: config);
+
+      final audioData = await _underlyingService!.synthesizeToAudio(
+        text,
+        config: config,
+      );
       _state = TTSState.stopped;
       return audioData;
     } catch (e) {
@@ -214,7 +219,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<void> stop() async {
     _ensureInitialized();
-    
+
     try {
       // Check if stop operation is valid for current state
       if (!_state.canStop) {
@@ -236,7 +241,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<void> pause() async {
     _ensureInitialized();
-    
+
     try {
       // Check if pause operation is valid for current state
       if (!_state.canPause) {
@@ -246,9 +251,8 @@ class AlouetteTTSService implements ITTSService {
       }
 
       // Check platform support for pause functionality
-      final platformDetector = _platformDetector ?? ServiceLocator.platformDetector;
-      final platform = platformDetector.getCurrentPlatform();
-      
+      final platform = _platformDetector.getCurrentPlatform();
+
       if (!_platformSupportsPause(platform)) {
         throw TTSPlatformException(
           'Pause functionality is not supported on ${platform.platformName}',
@@ -269,7 +273,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<void> resume() async {
     _ensureInitialized();
-    
+
     try {
       // Check if resume operation is valid for current state
       if (!_state.canResume) {
@@ -279,9 +283,8 @@ class AlouetteTTSService implements ITTSService {
       }
 
       // Check platform support for resume functionality
-      final platformDetector = _platformDetector ?? ServiceLocator.platformDetector;
-      final platform = platformDetector.getCurrentPlatform();
-      
+      final platform = _platformDetector.getCurrentPlatform();
+
       if (!_platformSupportsResume(platform)) {
         throw TTSPlatformException(
           'Resume functionality is not supported on ${platform.platformName}',
@@ -302,7 +305,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<void> updateConfig(AlouetteTTSConfig config) async {
     _ensureInitialized();
-    
+
     try {
       await _underlyingService!.updateConfig(config);
       _config = config;
@@ -323,7 +326,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<List<AlouetteVoice>> getAvailableVoices() async {
     _ensureInitialized();
-    
+
     try {
       return await _underlyingService!.getAvailableVoices();
     } catch (e) {
@@ -338,7 +341,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<List<AlouetteVoice>> getVoicesByLanguage(String languageCode) async {
     _ensureInitialized();
-    
+
     try {
       return await _underlyingService!.getVoicesByLanguage(languageCode);
     } catch (e) {
@@ -353,7 +356,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<void> saveAudioToFile(Uint8List audioData, String filePath) async {
     _ensureInitialized();
-    
+
     try {
       await _underlyingService!.saveAudioToFile(audioData, filePath);
     } catch (e) {
@@ -367,12 +370,12 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Synthesizes text to audio and saves it directly to a file
-  /// 
+  ///
   /// [text] - Text to synthesize
   /// [filePath] - Destination file path
   /// [config] - Optional configuration override
   /// [overwriteMode] - How to handle existing files
-  /// 
+  ///
   /// Returns the actual file path used (may differ if renamed)
   Future<String> synthesizeToFile(
     String text,
@@ -381,15 +384,15 @@ class AlouetteTTSService implements ITTSService {
     FileOverwriteMode overwriteMode = FileOverwriteMode.error,
   }) async {
     _ensureInitialized();
-    
+
     try {
       // Synthesize audio
       final audioData = await synthesizeToAudio(text, config: config);
-      
+
       // Get the format from config
       final effectiveConfig = config ?? _config;
       final format = effectiveConfig.audioFormat;
-      
+
       // Save to file with specified overwrite mode
       final actualPath = await AudioFileManager.saveAudioToFile(
         audioData,
@@ -397,7 +400,7 @@ class AlouetteTTSService implements ITTSService {
         format,
         overwriteMode: overwriteMode,
       );
-      
+
       return actualPath;
     } catch (e) {
       throw TTSFileException(
@@ -410,16 +413,19 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Validates a file path for audio output
-  /// 
+  ///
   /// [filePath] - The file path to validate
   /// [format] - Optional audio format (uses current config if not provided)
-  /// 
+  ///
   /// Throws [TTSException] if the path is invalid
-  Future<void> validateAudioFilePath(String filePath, {AudioFormat? format}) async {
+  Future<void> validateAudioFilePath(
+    String filePath, {
+    AudioFormat? format,
+  }) async {
     try {
       final audioFormat = format ?? _config.audioFormat;
       AudioFileManager.validateFilePath(filePath, audioFormat);
-      
+
       // Check permissions
       if (!await AudioFileManager.hasWritePermission(filePath)) {
         throw TTSFileException(
@@ -442,15 +448,19 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Estimates the file size for synthesizing given text
-  /// 
+  ///
   /// [text] - Text to be synthesized
   /// [format] - Optional audio format (uses current config if not provided)
-  /// 
+  ///
   /// Returns estimated file size in bytes
   int estimateAudioFileSize(String text, {AudioFormat? format}) {
     try {
       final audioFormat = format ?? _config.audioFormat;
-      return AudioFileManager.estimateFileSize(text, audioFormat, speechRate: _config.speechRate);
+      return AudioFileManager.estimateFileSize(
+        text,
+        audioFormat,
+        speechRate: _config.speechRate,
+      );
     } catch (e) {
       // Return a default estimate if calculation fails
       return text.length * 1000; // Rough estimate: 1KB per character
@@ -458,11 +468,11 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Saves audio to file with advanced options
-  /// 
+  ///
   /// [audioData] - Audio data to save
   /// [filePath] - Destination file path
   /// [options] - Save options including format, quality, and overwrite behavior
-  /// 
+  ///
   /// Returns [AudioSaveResult] with operation details
   Future<AudioSaveResult> saveAudioToFileWithOptions(
     Uint8List audioData,
@@ -470,7 +480,7 @@ class AlouetteTTSService implements ITTSService {
     AudioSaveOptions options,
   ) async {
     _ensureInitialized();
-    
+
     try {
       // Check if underlying service supports advanced options
       if (_underlyingService is EdgeTTSService) {
@@ -481,11 +491,7 @@ class AlouetteTTSService implements ITTSService {
             .saveAudioToFileWithOptions(audioData, filePath, options);
       } else {
         // Fallback to enhanced saver directly
-        return await AudioSaver.save(
-          audioData,
-          filePath,
-          options,
-        );
+        return await AudioSaver.save(audioData, filePath, options);
       }
     } catch (e) {
       throw TTSFileException(
@@ -498,12 +504,12 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Saves audio with automatic format conversion
-  /// 
+  ///
   /// [audioData] - Audio data to save
   /// [filePath] - Destination file path
   /// [quality] - Quality level (0.0 to 1.0)
   /// [overwriteMode] - How to handle existing files
-  /// 
+  ///
   /// Returns [AudioSaveResult] with operation details
   Future<AudioSaveResult> saveAudioWithAutoConversion(
     Uint8List audioData,
@@ -512,7 +518,7 @@ class AlouetteTTSService implements ITTSService {
     FileOverwriteMode overwriteMode = FileOverwriteMode.error,
   }) async {
     _ensureInitialized();
-    
+
     try {
       return await AudioSaver.saveAuto(
         audioData,
@@ -531,11 +537,11 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Batch saves multiple audio files
-  /// 
+  ///
   /// [audioFiles] - List of audio data and file path pairs
   /// [options] - Common save options for all files
   /// [maxConcurrent] - Maximum number of concurrent save operations
-  /// 
+  ///
   /// Returns list of [AudioSaveResult] for each file
   Future<List<AudioSaveResult>> saveBatchAudioFiles(
     List<AudioFileData> audioFiles,
@@ -543,13 +549,15 @@ class AlouetteTTSService implements ITTSService {
     int maxConcurrent = 3,
   }) async {
     _ensureInitialized();
-    
+
     try {
       // Validate storage space before starting
       if (!await AudioSaver.checkBatchSpace(audioFiles)) {
-        throw TTSException('Insufficient storage space for batch save operation');
+        throw TTSException(
+          'Insufficient storage space for batch save operation',
+        );
       }
-      
+
       return await AudioSaver.saveBatch(
         audioFiles,
         options,
@@ -568,7 +576,7 @@ class AlouetteTTSService implements ITTSService {
   @override
   Future<List<TTSResult>> processBatch(List<TTSRequest> requests) async {
     _ensureInitialized();
-    
+
     try {
       return await _underlyingService!.processBatch(requests);
     } catch (e) {
@@ -597,32 +605,12 @@ class AlouetteTTSService implements ITTSService {
     }
   }
 
-  /// Preprocesses text before synthesis
-  String _preprocessText(String text, AlouetteTTSConfig? config, TTSPlatform platform) {
-    if (text.trim().isEmpty) {
-      throw const TTSSynthesisException(
-        'Text cannot be empty',
-        text: '',
-      );
-    }
-
-    try {
-      return TextPreprocessor.preprocessText(
-        text,
-        config: config ?? _config,
-        platform: platform,
-      );
-    } catch (e) {
-      throw TTSSynthesisException(
-        'Failed to preprocess text: $e',
-        text: text,
-        originalError: e,
-      );
-    }
-  }
-
   /// Preprocesses a text chunk (without length validation)
-  String _preprocessTextChunk(String text, AlouetteTTSConfig? config, TTSPlatform platform) {
+  String _preprocessTextChunk(
+    String text,
+    AlouetteTTSConfig? config,
+    TTSPlatform platform,
+  ) {
     if (text.trim().isEmpty) {
       return text;
     }
@@ -657,20 +645,25 @@ class AlouetteTTSService implements ITTSService {
       // 3. Apply platform-specific preprocessing
       if (platform == TTSPlatform.web) {
         // Web Speech API has limited capabilities
-        processedText = processedText.replaceAll(RegExp(r'[^\w\s.,!?;:\-()"]'), ' ');
+        processedText = processedText.replaceAll(
+          RegExp(r'[^\w\s.,!?;:\-()"]'),
+          ' ',
+        );
       }
 
       // 4. Apply language-specific preprocessing
       final languageCode = config?.languageCode ?? _config.languageCode;
       if (languageCode.toLowerCase().startsWith('zh')) {
         // Chinese text processing - add spaces between Chinese and Latin characters
-        processedText = processedText.replaceAllMapped(
-          RegExp(r'([\u4e00-\u9fff])([a-zA-Z])'),
-          (match) => '${match.group(1)} ${match.group(2)}',
-        ).replaceAllMapped(
-          RegExp(r'([a-zA-Z])([\u4e00-\u9fff])'),
-          (match) => '${match.group(1)} ${match.group(2)}',
-        );
+        processedText = processedText
+            .replaceAllMapped(
+              RegExp(r'([\u4e00-\u9fff])([a-zA-Z])'),
+              (match) => '${match.group(1)} ${match.group(2)}',
+            )
+            .replaceAllMapped(
+              RegExp(r'([a-zA-Z])([\u4e00-\u9fff])'),
+              (match) => '${match.group(1)} ${match.group(2)}',
+            );
       }
 
       return processedText;
@@ -684,35 +677,44 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Validates and processes SSML markup
-  String _validateAndProcessSSML(String ssml, TTSPlatform platform, AlouetteTTSConfig? config) {
+  String _validateAndProcessSSML(
+    String ssml,
+    TTSPlatform platform,
+    AlouetteTTSConfig? config,
+  ) {
     if (ssml.trim().isEmpty) {
-      throw const TTSSynthesisException(
-        'SSML cannot be empty',
-        text: '',
-      );
+      throw const TTSSynthesisException('SSML cannot be empty', text: '');
     }
 
     try {
       String processedSSML = ssml;
-      
+
       // Check if this is plain text (no SSML tags)
       if (!ssml.contains('<speak')) {
         final languageCode = config?.languageCode ?? _config.languageCode;
-        processedSSML = SSMLValidator.wrapInSSML(ssml, languageCode: languageCode);
+        processedSSML = SSMLValidator.wrapInSSML(
+          ssml,
+          languageCode: languageCode,
+        );
       }
-      
+
       // Validate SSML
-      final validationResult = SSMLValidator.validateSSML(processedSSML, platform);
-      
+      final validationResult = SSMLValidator.validateSSML(
+        processedSSML,
+        platform,
+      );
+
       // Log warnings but don't fail for them
       for (final warning in validationResult.warnings) {
         // In a real implementation, you might want to use a proper logging framework
         print('SSML Warning: ${warning.message}');
       }
-      
+
       // Throw error if there are validation errors
       if (!validationResult.isValid) {
-        final errorMessages = validationResult.errors.map((e) => e.message).join('; ');
+        final errorMessages = validationResult.errors
+            .map((e) => e.message)
+            .join('; ');
         throw TTSSynthesisException(
           'SSML validation failed: $errorMessages',
           text: ssml,
@@ -736,15 +738,18 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Speaks multiple text chunks sequentially
-  Future<void> _speakTextChunks(List<String> chunks, AlouetteTTSConfig? config) async {
+  Future<void> _speakTextChunks(
+    List<String> chunks,
+    AlouetteTTSConfig? config,
+  ) async {
     for (int i = 0; i < chunks.length; i++) {
       if (_state == TTSState.stopped) {
         // Stop processing if the service was stopped
         break;
       }
-      
+
       await _underlyingService!.speak(chunks[i], config: config);
-      
+
       // Add a small pause between chunks if not the last chunk
       if (i < chunks.length - 1) {
         await Future.delayed(const Duration(milliseconds: 100));
@@ -805,59 +810,50 @@ class AlouetteTTSService implements ITTSService {
 
   /// Gets the current playback capabilities for the platform
   Map<String, bool> getPlaybackCapabilities() {
-    final platformDetector = _platformDetector ?? ServiceLocator.platformDetector;
-    final platform = platformDetector.getCurrentPlatform();
-    
+    final platform = _platformDetector.getCurrentPlatform();
+
     return {
       'canPlay': true, // All platforms support basic playback
       'canStop': true, // All platforms support stop
       'canPause': _platformSupportsPause(platform),
       'canResume': _platformSupportsResume(platform),
-      'supportsVolumeControl': _platformSupportsVolumeControl(platform),
-      'supportsRateControl': _platformSupportsRateControl(platform),
-      'supportsPitchControl': _platformSupportsPitchControl(platform),
+      'canSeek': false, // TTS generally doesn't support seeking
+      'canSetVolume': true, // All platforms support volume control
+      'canSetRate': true, // All platforms support rate control
+      'canSetPitch': platform != TTSPlatform.web, // Web may have limitations
     };
   }
 
-  /// Checks if the platform supports volume control during playback
-  bool _platformSupportsVolumeControl(TTSPlatform platform) {
-    switch (platform) {
-      case TTSPlatform.android:
-      case TTSPlatform.ios:
-      case TTSPlatform.linux:
-      case TTSPlatform.macos:
-      case TTSPlatform.windows:
-        return true;
-      case TTSPlatform.web:
-        // Web Speech API has limited volume control
-        return false;
-    }
-  }
+  /// Gets information about the current TTS engine being used
+  Map<String, dynamic> getTTSEngineInfo() {
+    final platform = _platformDetector.getCurrentPlatform();
 
-  /// Checks if the platform supports rate control during playback
-  bool _platformSupportsRateControl(TTSPlatform platform) {
-    switch (platform) {
-      case TTSPlatform.android:
-      case TTSPlatform.ios:
-      case TTSPlatform.linux:
-      case TTSPlatform.macos:
-      case TTSPlatform.windows:
-      case TTSPlatform.web:
-        return true; // All platforms support rate control
-    }
-  }
+    // Determine engine type based on platform and availability
+    String engineType;
+    String engineName;
+    String description;
 
-  /// Checks if the platform supports pitch control during playback
-  bool _platformSupportsPitchControl(TTSPlatform platform) {
-    switch (platform) {
-      case TTSPlatform.android:
-      case TTSPlatform.ios:
-      case TTSPlatform.linux:
-      case TTSPlatform.macos:
-      case TTSPlatform.windows:
-      case TTSPlatform.web:
-        return true; // All platforms support pitch control
+    if (platform.isDesktop) {
+      // On desktop, check if Edge TTS is likely being used
+      // This is a reasonable assumption based on the factory logic
+      engineType = 'edge-tts';
+      engineName = 'Microsoft Edge TTS';
+      description = 'High-quality neural voices powered by Microsoft Edge TTS';
+    } else {
+      // On mobile and web, Flutter TTS is used
+      engineType = 'flutter-tts';
+      engineName = 'Flutter TTS';
+      description = 'Cross-platform TTS using native platform voices';
     }
+
+    return {
+      'engineType': engineType,
+      'engineName': engineName,
+      'description': description,
+      'platform': platform.platformName,
+      'isInitialized': _isInitialized,
+      'currentState': _state.toString(),
+    };
   }
 
   /// Static method to create and initialize a new service instance

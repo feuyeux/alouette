@@ -13,10 +13,16 @@ class EdgeTTSCommandLineClient {
   /// Checks if edge-tts command is available on the system
   static Future<bool> isAvailable() async {
     try {
-      final result = await Process.run('which', [_edgeTTSCommand]);
-      return result.exitCode == 0;
+      // On Windows, use 'where' instead of 'which'
+      if (Platform.isWindows) {
+        final result = await Process.run('where', [_edgeTTSCommand]);
+        return result.exitCode == 0;
+      } else {
+        final result = await Process.run('which', [_edgeTTSCommand]);
+        return result.exitCode == 0;
+      }
     } catch (e) {
-      // Try alternative check for Windows
+      // Try alternative check - run the command with --help
       try {
         final result = await Process.run(_edgeTTSCommand, ['--help']);
         return result.exitCode == 0;
@@ -36,8 +42,9 @@ class EdgeTTSCommandLineClient {
     }
 
     final tempDir = Directory.systemTemp;
-    final outputFile =
-        File('${tempDir.path}/tts_output_${const Uuid().v4()}.mp3');
+    final outputFile = File(
+      '${tempDir.path}/tts_output_${const Uuid().v4()}.mp3',
+    );
 
     try {
       await _runEdgeTTSCommand(text, config, outputFile.path);
@@ -65,13 +72,11 @@ class EdgeTTSCommandLineClient {
 
   /// Runs the edge-tts command with the specified parameters
   Future<void> _runEdgeTTSCommand(
-      String text, AlouetteTTSConfig config, String outputPath) async {
-    final args = <String>[
-      '--text',
-      text,
-      '--write-media',
-      outputPath,
-    ];
+    String text,
+    AlouetteTTSConfig config,
+    String outputPath,
+  ) async {
+    final args = <String>['--text', text, '--write-media', outputPath];
 
     // Add voice if specified
     if (config.voiceName != null) {
@@ -86,30 +91,24 @@ class EdgeTTSCommandLineClient {
     if (config.speechRate != 1.0) {
       // Edge TTS expects rate as +/-N% format
       final rateChange = ((config.speechRate - 1.0) * 100).round();
-      if (rateChange != 0) {
-        final rateParam =
-            rateChange >= 0 ? '+${rateChange}%' : '${rateChange}%';
-        args.addAll(['--rate', rateParam]);
-      }
+      final rateParam = rateChange >= 0 ? '+${rateChange}%' : '${rateChange}%';
+      args.addAll(['--rate', rateParam]);
     }
 
     // Add volume if different from default
     if (config.volume != 1.0) {
       // Edge TTS expects volume as +/-N% format
       final volumeChange = ((config.volume - 1.0) * 100).round();
-      if (volumeChange != 0) {
-        final volumeParam =
-            volumeChange >= 0 ? '+${volumeChange}%' : '${volumeChange}%';
-        args.addAll(['--volume', volumeParam]);
-      }
+      final volumeParam = volumeChange >= 0
+          ? '+${volumeChange}%'
+          : '${volumeChange}%';
+      args.addAll(['--volume', volumeParam]);
     }
 
     // Add pitch if different from default
     if (config.pitch != 1.0) {
       final pitchHz = _convertPitchToHz(config.pitch);
-      if (pitchHz != '+0') {
-        args.addAll(['--pitch', '${pitchHz}Hz']);
-      }
+      args.addAll(['--pitch', '${pitchHz}Hz']);
     }
 
     try {
@@ -168,6 +167,7 @@ class EdgeTTSCommandLineClient {
         return 'zh-CN-XiaoxiaoNeural';
       case 'zh-tw':
         return 'zh-TW-HsiaoChenNeural';
+      case 'ar':
       case 'ar-sa':
         return 'ar-SA-ZariyahNeural';
       case 'hi-in':
