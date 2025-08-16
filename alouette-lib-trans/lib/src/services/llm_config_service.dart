@@ -12,7 +12,7 @@ class LLMConfigService {
   List<String> _availableModels = [];
   ConnectionStatus? _connectionStatus;
   bool _isTestingConnection = false;
-  
+
   final Map<String, TranslationProvider> _providers = {
     'ollama': OllamaProvider(),
     'lmstudio': LMStudioProvider(),
@@ -20,10 +20,10 @@ class LLMConfigService {
 
   /// Get the list of available models from the last successful connection test
   List<String> get availableModels => List.unmodifiable(_availableModels);
-  
+
   /// Get the last connection status
   ConnectionStatus? get connectionStatus => _connectionStatus;
-  
+
   /// Check if a connection test is currently in progress
   bool get isTestingConnection => _isTestingConnection;
 
@@ -36,7 +36,7 @@ class LLMConfigService {
     }
 
     _isTestingConnection = true;
-    
+
     try {
       final provider = _getProvider(config.provider);
       if (provider == null) {
@@ -44,7 +44,7 @@ class LLMConfigService {
       }
 
       _connectionStatus = await provider.testConnection(config);
-      
+
       if (_connectionStatus!.success) {
         // Fetch available models on successful connection
         try {
@@ -81,7 +81,9 @@ class LLMConfigService {
       _availableModels = models;
       return models;
     } catch (e) {
-      throw TranslationException('Failed to get available models: ${e.toString()}');
+      throw TranslationException(
+        'Failed to get available models: ${e.toString()}',
+      );
     }
   }
 
@@ -94,7 +96,9 @@ class LLMConfigService {
       // For now, we'll just store it in memory or use platform-specific storage
       // Implementation would depend on the specific storage mechanism chosen
     } catch (e) {
-      throw TranslationException('Failed to save configuration: ${e.toString()}');
+      throw TranslationException(
+        'Failed to save configuration: ${e.toString()}',
+      );
     }
   }
 
@@ -106,7 +110,9 @@ class LLMConfigService {
       // For now, return null indicating no saved config
       return null;
     } catch (e) {
-      throw TranslationException('Failed to load configuration: ${e.toString()}');
+      throw TranslationException(
+        'Failed to load configuration: ${e.toString()}',
+      );
     }
   }
 
@@ -189,34 +195,37 @@ class LLMConfigService {
     }
 
     // Provider-specific warnings
-    if (config.provider == 'lmstudio' && 
+    if (config.provider == 'lmstudio' &&
         (config.apiKey == null || config.apiKey!.isEmpty)) {
       warnings.add('API key is recommended for LM Studio');
     }
 
     // URL-related warnings
     if (config.serverUrl.isNotEmpty) {
-      if (config.serverUrl.contains('localhost') || 
+      if (config.serverUrl.contains('localhost') ||
           config.serverUrl.contains('127.0.0.1')) {
-        warnings.add('Using localhost - ensure the server is running on this machine');
+        warnings.add(
+          'Using localhost - ensure the server is running on this machine',
+        );
       }
 
-      if (config.serverUrl.startsWith('http:') && 
+      if (config.serverUrl.startsWith('http:') &&
           !config.serverUrl.contains('localhost') &&
           !config.serverUrl.contains('127.0.0.1')) {
-        warnings.add('Using HTTP (not HTTPS) for remote server - consider using HTTPS for security');
+        warnings.add(
+          'Using HTTP (not HTTPS) for remote server - consider using HTTPS for security',
+        );
       }
     }
 
-    return {
-      'isValid': errors.isEmpty,
-      'errors': errors,
-      'warnings': warnings,
-    };
+    return {'isValid': errors.isEmpty, 'errors': errors, 'warnings': warnings};
   }
 
   /// Get recommended settings for a provider
-  Map<String, dynamic> getRecommendedSettings(String provider, {bool isAndroid = false}) {
+  Map<String, dynamic> getRecommendedSettings(
+    String provider, {
+    bool isAndroid = false,
+  }) {
     // Use different base URL for Android to avoid localhost issues
     final baseUrl = isAndroid ? 'http://10.0.2.2' : 'http://localhost';
 
@@ -231,12 +240,7 @@ class LLMConfigService {
             'Run "ollama serve" to start the server',
             'Pull a model with "ollama pull llama3.2" or similar',
           ],
-          'commonModels': [
-            'llama3.2',
-            'llama3.1',
-            'mistral',
-            'codellama',
-          ],
+          'commonModels': ['llama3.2', 'llama3.1', 'mistral', 'codellama'],
         };
 
       case 'lmstudio':
@@ -271,13 +275,15 @@ class LLMConfigService {
   /// Get platform-specific configuration adjustments
   Map<String, dynamic> getPlatformAdjustments() {
     final platform = Platform.operatingSystem;
-    
+
     return {
       'platform': platform,
       'isAndroid': platform == 'android',
       'isIOS': platform == 'ios',
       'isWeb': false, // This would need to be detected differently for web
-      'recommendedTimeout': platform == 'android' || platform == 'ios' ? 30 : 10,
+      'recommendedTimeout': platform == 'android' || platform == 'ios'
+          ? 30
+          : 10,
       'networkNotes': _getNetworkNotes(platform),
     };
   }
@@ -332,7 +338,7 @@ class LLMConfigService {
   Map<String, dynamic> getConnectionSummary() {
     return {
       'isConnected': _connectionStatus?.success ?? false,
-      'lastConnectionTime': _connectionStatus?.timestamp?.toIso8601String(),
+      'lastConnectionTime': _connectionStatus?.timestamp.toIso8601String(),
       'modelCount': _availableModels.length,
       'availableModels': _availableModels,
       'lastMessage': _connectionStatus?.message,

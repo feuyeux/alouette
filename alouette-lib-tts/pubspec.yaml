@@ -1,29 +1,31 @@
-name: alouette_lib_tts
-description: A Flutter library for text-to-speech functionality used across Alouette applications
+name: alouette_tts
+description: A TTS library that provides consistent text-to-speech functionality across all major platforms.
 version: 1.0.0
-homepage: https://github.com/alouette/alouette-lib-tts
 
 environment:
-  sdk: '>=3.8.1 <4.0.0'
-  flutter: ">=3.8.1"
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  flutter_tts: ^4.2.3
+  flutter_tts: ^4.0.2
+  get_it: ^8.2.0
+  meta: ^1.16.0
+  web_socket_channel: ^3.0.3
+  http: ^1.1.0
+  uuid: ^4.1.0
+  path: ^1.8.3
+  path_provider: ^2.1.1
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0
-  mockito: ^5.4.4
-  build_runner: ^2.4.13
+  flutter_lints: ^6.0.0
+  mockito: ^5.4.2
+  build_runner: ^2.4.7
+  test: ^1.25.15
+  path_provider_platform_interface: ^2.1.1
 
 flutter:
-  plugin:
-    platforms:
-      android:
-        package: com.alouette.lib.tts
-        pluginClass: AlouetteLibTtsPlugin
-      ios:
-        pluginClass: AlouetteLibTtsPlugin

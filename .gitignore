@@ -20,6 +20,7 @@ Thumbs.db
 *.tmp
 *.temp
 
+
 # Flutter/Dart
 .dart_tool/
 .packages
