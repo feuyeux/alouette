@@ -44,17 +44,32 @@ class TTSFactory implements ITTSFactory {
     try {
       ITTSService primaryService;
 
-      // For desktop platforms, prefer Edge TTS if available
+      // For desktop platforms (including Linux), prioritize Edge TTS for better quality
       if (platform.isDesktop) {
-        final isEdgeAvailable = await _platformDetector.isEdgeTTSAvailable();
-        if (isEdgeAvailable) {
-          primaryService = await _createRawEdgeTTSService();
-        } else {
-          // Fallback to Flutter TTS for desktop if Edge TTS is not available
-          primaryService = await _createRawFlutterTTSService();
+        try {
+          // Try Edge TTS first on desktop platforms
+          final isEdgeAvailable = await _platformDetector.isEdgeTTSAvailable();
+          if (isEdgeAvailable) {
+            primaryService = await _createRawEdgeTTSService();
+          } else {
+            // If Edge TTS is not available, fallback to Flutter TTS
+            primaryService = await _createRawFlutterTTSService();
+          }
+        } catch (edgeError) {
+          // If Edge TTS fails on desktop, try Flutter TTS as fallback
+          try {
+            primaryService = await _createRawFlutterTTSService();
+          } catch (flutterError) {
+            // Both services failed
+            throw TTSInitializationException(
+              'Failed to initialize both Edge TTS ($edgeError) and Flutter TTS ($flutterError) on ${platform.platformName}',
+              platform.platformName,
+              originalError: edgeError,
+            );
+          }
         }
       } else {
-        // For mobile and web platforms, use Flutter TTS
+        // For mobile and web platforms, use Flutter TTS only
         primaryService = await _createRawFlutterTTSService();
       }
 

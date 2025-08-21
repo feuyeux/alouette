@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import '../interfaces/i_tts_service.dart';
@@ -7,6 +8,7 @@ import '../utils/audio_file_manager.dart';
 import '../utils/audio_format_converter.dart';
 import '../utils/audio_saver.dart';
 import '../enums/audio_format.dart';
+import '../enums/tts_error_code.dart';
 import '../models/alouette_tts_config.dart';
 import '../models/alouette_voice.dart';
 import '../models/tts_request.dart';
@@ -26,6 +28,12 @@ import 'edge_tts/edge_tts_voice_cache.dart';
 import 'edge_tts/edge_tts_connection_pool.dart';
 import 'edge_tts/edge_tts_performance_monitor.dart';
 
+class _Player {
+  final String executable;
+  final List<String> Function(String path) args;
+  _Player(this.executable, this.args);
+}
+
 /// Edge TTS service implementation for desktop platforms
 class EdgeTTSService implements ITTSService {
   AlouetteTTSConfig _config = AlouetteTTSConfig.defaultConfig();
@@ -37,13 +45,19 @@ class EdgeTTSService implements ITTSService {
 
   EdgeTTSWebSocketClient? _wsClient;
   EdgeTTSCommandLineClient? _cmdClient;
+  // Per-language WebSocket clients for connection reuse
+  final Map<String, EdgeTTSWebSocketClient> _wsClientsByLanguage = {};
   EdgeTTSVoiceDiscovery? _voiceDiscovery;
   EdgeTTSVoiceCache? _voiceCache;
   EdgeTTSConnectionPool? _connectionPool;
   EdgeTTSPerformanceMonitor? _performanceMonitor;
   Timer? _playbackTimer;
+  Process? _currentAudioProcess;
   bool _useCommandLineFallback = false;
   bool _isInitialized = false;
+  // Simple in-memory cache (key -> audio bytes)
+  final Map<String, Uint8List> _audioCache = {};
+  late final Directory _cacheDir;
 
   @override
   Future<void> initialize({
@@ -61,6 +75,21 @@ class EdgeTTSService implements ITTSService {
         _config = config;
       }
 
+      // Initialize components safely with error handling
+      await _initializeComponents();
+
+      _state = TTSState.ready;
+      _isInitialized = true;
+    } catch (e) {
+      _state = TTSState.error;
+      _onError?.call('Failed to initialize Edge TTS service: $e');
+      rethrow;
+    }
+  }
+
+  /// Initialize components with proper error handling
+  Future<void> _initializeComponents() async {
+    try {
       // Initialize WebSocket client
       _wsClient = EdgeTTSWebSocketClient();
 
@@ -75,15 +104,43 @@ class EdgeTTSService implements ITTSService {
       _connectionPool = EdgeTTSConnectionPool();
       _performanceMonitor = EdgeTTSPerformanceMonitor();
 
-      // Check if command-line fallback is available
-      _useCommandLineFallback = await EdgeTTSCommandLineClient.isAvailable();
+      // Prepare disk cache directory
+      _cacheDir = Directory('${Directory.systemTemp.path}/alouette_tts_cache');
+      if (!await _cacheDir.exists()) {
+        await _cacheDir.create(recursive: true);
+      }
 
-      _state = TTSState.ready;
-      _isInitialized = true;
+      // Check if command-line fallback is available
+      try {
+        _useCommandLineFallback = await EdgeTTSCommandLineClient.isAvailable();
+      } catch (e) {
+        // Command line fallback not available, continue with WebSocket only
+        _useCommandLineFallback = false;
+      }
+
+      // Pre-warm WebSocket connection for better responsiveness
+      await _preWarmConnection();
     } catch (e) {
-      _state = TTSState.error;
-      _onError?.call('Failed to initialize Edge TTS service: $e');
-      rethrow;
+      throw TTSInitializationException(
+        'Failed to initialize Edge TTS components: $e',
+        'Edge TTS',
+        errorCode: TTSErrorCode.initializationFailed,
+      );
+    }
+  }
+
+  /// Pre-warms the WebSocket connection for better responsiveness
+  Future<void> _preWarmConnection() async {
+    // Pre-warm a default client for the configured language
+    final lang = _config.languageCode;
+    try {
+      final client = EdgeTTSWebSocketClient();
+      _wsClientsByLanguage[lang] = client;
+      print('DEBUG: Pre-warming WebSocket connection for $lang...');
+      await client.connect();
+      print('DEBUG: WebSocket connection pre-warmed successfully for $lang');
+    } catch (e) {
+      print('DEBUG: Failed to pre-warm WebSocket connection: $e');
     }
   }
 
@@ -96,16 +153,9 @@ class EdgeTTSService implements ITTSService {
       final effectiveConfig = config ?? _config;
       final audioData = await synthesizeToAudio(text, config: effectiveConfig);
 
-      // For now, we'll just complete immediately since we don't have audio playback
-      // Audio playback will be implemented in a future task
-      _state = TTSState.playing;
-
-      // Simulate playback duration
-      final estimatedDuration = _estimatePlaybackDuration(text);
-      _playbackTimer = Timer(estimatedDuration, () {
-        _state = TTSState.stopped;
-        _onComplete?.call();
-      });
+  // Try to play the audio data using a system player if available.
+  _state = TTSState.playing;
+  await _playAudioData(audioData, text);
     } catch (e) {
       _state = TTSState.error;
       _onError?.call('Speech synthesis failed: $e');
@@ -126,17 +176,12 @@ class EdgeTTSService implements ITTSService {
         ssml,
         effectiveConfig,
       );
-      final audioData = await _synthesizeSSML(processedSSML, effectiveConfig);
+  final audioData = await _synthesizeSSML(processedSSML, effectiveConfig);
 
-      // Simulate playback
-      _state = TTSState.playing;
-      final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
-      final estimatedDuration = _estimatePlaybackDuration(text);
-
-      _playbackTimer = Timer(estimatedDuration, () {
-        _state = TTSState.stopped;
-        _onComplete?.call();
-      });
+  // Play audio data
+  _state = TTSState.playing;
+  final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
+  await _playAudioData(audioData, text);
     } catch (e) {
       _state = TTSState.error;
       _onError?.call('SSML synthesis failed: $e');
@@ -170,6 +215,22 @@ class EdgeTTSService implements ITTSService {
 
       _state = TTSState.synthesizing;
 
+      // Use cache key based on text + language + voice
+      final cacheKey = '${effectiveConfig.languageCode}::${effectiveConfig.voiceName ?? ''}::${text.hashCode}';
+
+      // Check in-memory cache first
+      if (_audioCache.containsKey(cacheKey)) {
+        return _audioCache[cacheKey]!;
+      }
+
+      // Check disk cache
+      final cachedFile = File('${_cacheDir.path}/$cacheKey.mp3');
+      if (await cachedFile.exists()) {
+        final bytes = await cachedFile.readAsBytes();
+        _audioCache[cacheKey] = Uint8List.fromList(bytes);
+        return _audioCache[cacheKey]!;
+      }
+
       // Generate SSML from text
       final ssml = EdgeTTSSSMLGenerator.generateSSML(text, effectiveConfig);
 
@@ -184,6 +245,12 @@ class EdgeTTSService implements ITTSService {
           text: text.substring(0, 50) + '...',
         );
       }
+
+      // Save to caches
+      try {
+        _audioCache[cacheKey] = audioData;
+        await File('${_cacheDir.path}/$cacheKey.mp3').writeAsBytes(audioData);
+      } catch (_) {}
 
       _state = TTSState.ready;
       return audioData;
@@ -200,6 +267,16 @@ class EdgeTTSService implements ITTSService {
   Future<void> stop() async {
     _playbackTimer?.cancel();
     _playbackTimer = null;
+    // Kill any external player process
+    try {
+      if (_currentAudioProcess != null) {
+        _currentAudioProcess!.kill(ProcessSignal.sigterm);
+        _currentAudioProcess = null;
+      }
+    } catch (e) {
+      // ignore
+    }
+
     _state = TTSState.stopped;
   }
 
@@ -218,6 +295,81 @@ class EdgeTTSService implements ITTSService {
       // Note: Real implementation would resume from pause position
       // For now, we'll just continue with remaining time
     }
+  }
+
+  /// Plays raw audio data using a system player. Saves to a temp file and executes
+  /// a suitable player (mpv/ffplay/aplay/paplay/xdg-open). Emits onComplete when done.
+  Future<void> _playAudioData(Uint8List audioData, String textHint) async {
+    final tempDir = Directory.systemTemp;
+    final tempFile = File('${tempDir.path}/alouette_play_${DateTime.now().millisecondsSinceEpoch}.mp3');
+    try {
+      await tempFile.writeAsBytes(audioData);
+
+      // Attempt to find a system player
+      final player = await _findSystemPlayer();
+      if (player == null) {
+        // If none, just simulate playback duration
+        final estimatedDuration = _estimatePlaybackDuration(textHint);
+        _playbackTimer = Timer(estimatedDuration, () {
+          _state = TTSState.stopped;
+          _onComplete?.call();
+        });
+        return;
+      }
+
+      // Spawn player process
+      final proc = await Process.start(player.executable, player.args(tempFile.path));
+      _currentAudioProcess = proc;
+
+      // When process exits, mark complete
+      proc.exitCode.then((_) {
+        _currentAudioProcess = null;
+        _state = TTSState.stopped;
+        _onComplete?.call();
+      });
+    } catch (e) {
+      // On error, fallback to simulated playback
+      final estimatedDuration = _estimatePlaybackDuration(textHint);
+      _playbackTimer = Timer(estimatedDuration, () {
+        _state = TTSState.stopped;
+        _onComplete?.call();
+      });
+    } finally {
+      // copy last file for debugging
+      try {
+        final saved = File('/tmp/alouette_last_tts.mp3');
+        if (await tempFile.exists()) {
+          await tempFile.copy(saved.path);
+        }
+      } catch (_) {}
+      // schedule temp cleanup after a short delay to allow player to open
+      Future.delayed(Duration(seconds: 5), () async {
+        try {
+          if (await tempFile.exists()) await tempFile.delete();
+        } catch (_) {}
+      });
+    }
+  }
+
+  /// Finds an available system audio player and returns an executable + arg builder.
+  Future<_Player?> _findSystemPlayer() async {
+    // Prefer mpv, ffplay, paplay, aplay, xdg-open
+    final candidates = [
+      _Player('mpv', (path) => ['--no-terminal', path]),
+      _Player('ffplay', (path) => ['-nodisp', '-autoexit', path]),
+      _Player('paplay', (path) => [path]),
+      _Player('aplay', (path) => [path]),
+      _Player('xdg-open', (path) => [path]),
+    ];
+
+    for (final p in candidates) {
+      try {
+        final result = await Process.run('which', [p.executable]);
+        if (result.exitCode == 0) return p;
+      } catch (_) {}
+    }
+
+    return null;
   }
 
   @override
@@ -434,6 +586,12 @@ class EdgeTTSService implements ITTSService {
     }
   }
 
+  /// Ensures WebSocket connection is ready, reconnecting if necessary
+  Future<void> _ensureConnectionReady() async {
+  // No-op: individual per-language clients are managed in _synthesizeSSML
+  return;
+  }
+
   @override
   void dispose() {
     _playbackTimer?.cancel();
@@ -482,129 +640,77 @@ class EdgeTTSService implements ITTSService {
 
     print('DEBUG: Starting synthesis for language: ${config.languageCode}');
     print('DEBUG: Text length: $textLength');
-    print(
-      'DEBUG: SSML preview: ${ssml.substring(0, math.min(200, ssml.length))}...',
-    );
+    print('DEBUG: SSML preview: ${ssml.substring(0, math.min(200, ssml.length))}...');
 
     try {
-      // Try WebSocket first
-      if (_wsClient != null) {
-        try {
-          print('DEBUG: Attempting WebSocket synthesis...');
-          final result = await _wsClient!.synthesize(ssml, config);
+      // Ensure any global readiness (noop for per-language clients)
+      await _ensureConnectionReady();
 
-          // Record successful synthesis
-          _performanceMonitor?.recordSynthesis(
-            duration: stopwatch.elapsed,
-            textLength: textLength,
-            success: true,
-            metadata: {'method': 'websocket'},
-          );
+      final lang = config.languageCode;
+      var perLangClient = _wsClientsByLanguage[lang];
+      if (perLangClient == null) {
+        perLangClient = EdgeTTSWebSocketClient();
+        _wsClientsByLanguage[lang] = perLangClient;
+      }
 
-          print('DEBUG: WebSocket synthesis successful');
-          return result;
-        } catch (e) {
-          print('DEBUG: WebSocket synthesis failed: $e');
+      // Try WebSocket synthesis using the per-language client
+      try {
+        print('DEBUG: Attempting WebSocket synthesis for language $lang...');
+        final result = await perLangClient.synthesize(ssml, config);
 
-          // If WebSocket fails and command-line is available, try fallback
-          if (_useCommandLineFallback && _cmdClient != null) {
-            try {
-              print('DEBUG: Attempting command-line fallback...');
-              // Extract text from SSML for command-line client
-              final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
-              final result = await _cmdClient!.synthesize(text, config);
+        _performanceMonitor?.recordSynthesis(
+          duration: stopwatch.elapsed,
+          textLength: textLength,
+          success: true,
+          metadata: {'method': 'websocket'},
+        );
 
-              // Record successful fallback synthesis
-              _performanceMonitor?.recordSynthesis(
-                duration: stopwatch.elapsed,
-                textLength: textLength,
-                success: true,
-                metadata: {'method': 'command_line_fallback'},
-              );
+        print('DEBUG: WebSocket synthesis successful');
+        return result;
+      } catch (e) {
+        print('DEBUG: WebSocket synthesis failed: $e');
 
-              print('DEBUG: Command-line fallback successful');
-              return result;
-            } catch (fallbackError) {
-              print('DEBUG: Command-line fallback also failed: $fallbackError');
+        // Try command-line fallback if available
+        if (_useCommandLineFallback && _cmdClient != null) {
+          try {
+            print('DEBUG: Attempting command-line fallback...');
+            final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
+            final result = await _cmdClient!.synthesize(text, config);
 
-              // Record failure
-              _performanceMonitor?.recordSynthesis(
-                duration: stopwatch.elapsed,
-                textLength: textLength,
-                success: false,
-                errorType: 'both_methods_failed',
-              );
+            _performanceMonitor?.recordSynthesis(
+              duration: stopwatch.elapsed,
+              textLength: textLength,
+              success: true,
+              metadata: {'method': 'command_line_fallback'},
+            );
 
-              // If both fail, throw the original WebSocket error
-              if (e is TTSException) rethrow;
-              throw TTSSynthesisException(
-                'Failed to synthesize SSML: $e',
-                text: ssml,
-              );
-            }
+            print('DEBUG: Command-line fallback successful');
+            return result;
+          } catch (fallbackError) {
+            print('DEBUG: Command-line fallback also failed: $fallbackError');
+
+            _performanceMonitor?.recordSynthesis(
+              duration: stopwatch.elapsed,
+              textLength: textLength,
+              success: false,
+              errorType: 'both_methods_failed',
+            );
+
+            if (e is TTSException) rethrow;
+            throw TTSSynthesisException('Failed to synthesize SSML: $e', text: ssml);
           }
-
-          // Record WebSocket failure
-          _performanceMonitor?.recordSynthesis(
-            duration: stopwatch.elapsed,
-            textLength: textLength,
-            success: false,
-            errorType: 'websocket_failed',
-          );
-
-          // No fallback available, rethrow original error
-          if (e is TTSException) rethrow;
-          throw TTSSynthesisException(
-            'Failed to synthesize SSML: $e',
-            text: ssml,
-          );
         }
+
+        _performanceMonitor?.recordSynthesis(
+          duration: stopwatch.elapsed,
+          textLength: textLength,
+          success: false,
+          errorType: 'websocket_failed',
+        );
+
+        if (e is TTSException) rethrow;
+        throw TTSSynthesisException('Failed to synthesize SSML: $e', text: ssml);
       }
-
-      // WebSocket not available, try command-line
-      if (_useCommandLineFallback && _cmdClient != null) {
-        try {
-          final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
-          final result = await _cmdClient!.synthesize(text, config);
-
-          // Record successful command-line synthesis
-          _performanceMonitor?.recordSynthesis(
-            duration: stopwatch.elapsed,
-            textLength: textLength,
-            success: true,
-            metadata: {'method': 'command_line'},
-          );
-
-          return result;
-        } catch (e) {
-          // Record command-line failure
-          _performanceMonitor?.recordSynthesis(
-            duration: stopwatch.elapsed,
-            textLength: textLength,
-            success: false,
-            errorType: 'command_line_failed',
-          );
-
-          if (e is TTSException) rethrow;
-          throw TTSSynthesisException(
-            'Failed to synthesize using command-line: $e',
-            text: ssml,
-          );
-        }
-      }
-
-      // Record initialization failure
-      _performanceMonitor?.recordSynthesis(
-        duration: stopwatch.elapsed,
-        textLength: textLength,
-        success: false,
-        errorType: 'no_client_available',
-      );
-
-      throw TTSInitializationException(
-        'No EdgeTTS client available (neither WebSocket nor command-line)',
-        'desktop',
-      );
     } finally {
       stopwatch.stop();
     }

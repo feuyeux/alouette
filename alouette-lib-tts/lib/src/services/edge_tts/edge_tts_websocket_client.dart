@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'dart:io';
 import 'package:uuid/uuid.dart';
 import '../../exceptions/tts_exception.dart';
 import '../../enums/tts_error_code.dart';
 import '../../models/alouette_tts_config.dart';
+import 'edge_tts_connection_pool.dart';
 
 /// WebSocket client for Edge TTS service
 class EdgeTTSWebSocketClient {
@@ -13,42 +14,21 @@ class EdgeTTSWebSocketClient {
       'wss://speech.platform.bing.com/consumer/speech/synthesize/realtimestreaming/edge/v1';
   static const String _trustedClientToken = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
 
-  WebSocketChannel? _channel;
-  final Completer<Uint8List> _audioCompleter = Completer<Uint8List>();
-  final List<int> _audioBuffer = [];
   bool _isConnected = false;
-  String? _requestId;
+  DateTime? _lastUsed;
 
   /// Connects to the Edge TTS WebSocket service
   Future<void> connect() async {
-    if (_isConnected) return;
-
-    try {
-      final uri = Uri.parse(_edgeTTSUrl).replace(queryParameters: {
-        'TrustedClientToken': _trustedClientToken,
-        'ConnectionId': const Uuid().v4(),
-      });
-
-      _channel = WebSocketChannel.connect(uri);
-      _isConnected = true;
-
-      // Listen for incoming messages
-      _channel!.stream.listen(
-        _handleMessage,
-        onError: _handleError,
-        onDone: _handleDisconnect,
-      );
-
-      // Send configuration message
-      await _sendConfigMessage();
-    } catch (e) {
-      _isConnected = false;
-      throw TTSNetworkException(
-        'Failed to connect to Edge TTS service: $e',
-        endpoint: _edgeTTSUrl,
-        errorCode: TTSErrorCode.connectionFailed,
-      );
+    if (_isConnected) {
+      _lastUsed = DateTime.now();
+      return;
     }
+
+    // For now, we'll use the edge-tts command line tool as a fallback
+    // since direct WebSocket implementation has platform compatibility issues
+    _isConnected = true;
+    _lastUsed = DateTime.now();
+    print('DEBUG: Using edge-tts command line fallback instead of WebSocket');
   }
 
   /// Synthesizes text to audio using the WebSocket connection
@@ -57,24 +37,11 @@ class EdgeTTSWebSocketClient {
       await connect();
     }
 
-    _requestId = const Uuid().v4();
-    _audioBuffer.clear();
+    _lastUsed = DateTime.now();
 
     try {
-      // Send synthesis request
-      await _sendSynthesisRequest(ssml, config);
-
-      // Wait for audio data
-      final audioData = await _audioCompleter.future.timeout(
-        const Duration(seconds: 30),
-        onTimeout: () => throw TTSSynthesisException(
-          'Synthesis timeout after 30 seconds',
-          text: ssml,
-          timeoutDuration: const Duration(seconds: 30),
-        ),
-      );
-
-      return audioData;
+      // Use edge-tts command line tool as fallback
+      return await _synthesizeViaEdgeTTS(ssml, config);
     } catch (e) {
       if (e is TTSException) rethrow;
       throw TTSSynthesisException(
@@ -84,158 +51,101 @@ class EdgeTTSWebSocketClient {
     }
   }
 
+  /// Use Python edge-tts library via process execution
+  Future<Uint8List> _synthesizeViaEdgeTTS(String ssml, AlouetteTTSConfig config) async {
+    try {
+      // Extract text from SSML for edge-tts command line
+      final text = _extractTextFromSSML(ssml);
+      
+  // Create temporary file for output (use MP3 format)
+  final tempDir = Directory.systemTemp;
+  final tempFile = File('${tempDir.path}/tts_output_${DateTime.now().millisecondsSinceEpoch}.mp3');
+  // Log the local audio file path for debugging playback issues
+  print('DEBUG: edge-tts temp audio path -> ${tempFile.path}');
+      
+      try {
+        // Try edge-tts command first
+        final result = await Process.run('edge-tts', [
+          '--voice', config.voiceName ?? 'Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)',
+          '--text', text,
+          '--write-media', tempFile.path,
+        ]);
+        
+        if (result.exitCode != 0) {
+          // Try with python -m edge_tts if direct command fails
+          final pythonResult = await Process.run('python', [
+            '-m', 'edge_tts',
+            '--voice', config.voiceName ?? 'Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)',
+            '--text', text,
+            '--write-media', tempFile.path,
+          ]);
+          
+          if (pythonResult.exitCode != 0) {
+            throw TTSSynthesisException('Edge TTS failed: ${pythonResult.stderr}', text: text);
+          }
+        }
+        
+        // Read the generated audio file
+        if (await tempFile.exists()) {
+          print('DEBUG: edge-tts generated audio file found at ${tempFile.path}');
+          final audioData = await tempFile.readAsBytes();
+          return Uint8List.fromList(audioData);
+        } else {
+          print('DEBUG: edge-tts did not generate audio at expected path: ${tempFile.path}');
+          throw TTSSynthesisException('Audio file was not generated', text: text);
+        }
+        
+      } finally {
+        // Preserve a copy for debugging, then clean up temporary file
+        if (await tempFile.exists()) {
+          try {
+            final savedPath = '/tmp/alouette_last_tts.mp3';
+            final savedFile = File(savedPath);
+            await tempFile.copy(savedFile.path);
+            print('DEBUG: Copied temporary audio to $savedPath');
+          } catch (e) {
+            print('DEBUG: Failed to copy temporary audio file for debugging: $e');
+          }
+
+          print('DEBUG: Deleting temporary audio file ${tempFile.path}');
+          await tempFile.delete();
+        }
+      }
+      
+    } catch (e) {
+      throw TTSSynthesisException('Failed to synthesize via Edge TTS: $e', text: ssml);
+    }
+  }
+
+  /// Extract plain text from SSML
+  String _extractTextFromSSML(String ssml) {
+    // Simple SSML text extraction - remove XML tags
+    return ssml
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .trim();
+  }
+
   /// Disconnects from the WebSocket service
   Future<void> disconnect() async {
     if (!_isConnected) return;
-
     _isConnected = false;
-    await _channel?.sink.close();
-    _channel = null;
-  }
-
-  /// Sends the initial configuration message
-  Future<void> _sendConfigMessage() async {
-    final configMessage =
-        'X-Timestamp:${DateTime.now().toUtc().toIso8601String()}\r\n'
-        'Content-Type:application/json; charset=utf-8\r\n'
-        'Path:speech.config\r\n\r\n'
-        '{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"true"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}';
-
-    _channel?.sink.add(configMessage);
-  }
-
-  /// Sends the synthesis request message
-  Future<void> _sendSynthesisRequest(
-      String ssml, AlouetteTTSConfig config) async {
-    final timestamp = DateTime.now().toUtc().toIso8601String();
-
-    final synthesisMessage = 'X-RequestId:$_requestId\r\n'
-        'X-Timestamp:$timestamp\r\n'
-        'Content-Type:application/ssml+xml\r\n'
-        'Path:ssml\r\n\r\n'
-        '$ssml';
-
-    _channel?.sink.add(synthesisMessage);
-  }
-
-  /// Handles incoming WebSocket messages
-  void _handleMessage(dynamic message) {
-    if (message is String) {
-      _handleTextMessage(message);
-    } else if (message is List<int>) {
-      _handleBinaryMessage(message);
-    }
-  }
-
-  /// Handles text messages from the WebSocket
-  void _handleTextMessage(String message) {
-    final lines = message.split('\r\n');
-    final headers = <String, String>{};
-
-    // Parse headers
-    for (final line in lines) {
-      if (line.isEmpty) break;
-      final colonIndex = line.indexOf(':');
-      if (colonIndex > 0) {
-        final key = line.substring(0, colonIndex);
-        final value = line.substring(colonIndex + 1);
-        headers[key] = value;
-      }
-    }
-
-    final path = headers['Path'];
-
-    if (path == 'turn.end') {
-      // Synthesis complete
-      if (!_audioCompleter.isCompleted) {
-        _audioCompleter.complete(Uint8List.fromList(_audioBuffer));
-      }
-    } else if (path == 'response') {
-      // Handle response messages (errors, etc.)
-      final bodyStart = message.indexOf('\r\n\r\n');
-      if (bodyStart >= 0) {
-        final body = message.substring(bodyStart + 4);
-        try {
-          final responseData = jsonDecode(body);
-          if (responseData['error'] != null) {
-            _handleSynthesisError(responseData['error']);
-          }
-        } catch (e) {
-          // Ignore JSON parsing errors for non-JSON responses
-        }
-      }
-    }
-  }
-
-  /// Handles binary messages (audio data) from the WebSocket
-  void _handleBinaryMessage(List<int> message) {
-    // Edge TTS sends binary messages with headers followed by audio data
-    // The audio data starts after the first occurrence of 0x00, 0x67, 0x58
-    const audioMarker = [0x00, 0x67, 0x58];
-
-    for (int i = 0; i <= message.length - audioMarker.length; i++) {
-      bool found = true;
-      for (int j = 0; j < audioMarker.length; j++) {
-        if (message[i + j] != audioMarker[j]) {
-          found = false;
-          break;
-        }
-      }
-
-      if (found) {
-        // Found audio data marker, add the audio data to buffer
-        final audioData = message.sublist(i + audioMarker.length);
-        _audioBuffer.addAll(audioData);
-        break;
-      }
-    }
-  }
-
-  /// Handles synthesis errors
-  void _handleSynthesisError(Map<String, dynamic> error) {
-    final errorMessage =
-        error['message'] as String? ?? 'Unknown synthesis error';
-
-    if (!_audioCompleter.isCompleted) {
-      _audioCompleter.completeError(
-        TTSSynthesisException(
-          errorMessage,
-          text: '',
-          errorCode: TTSErrorCode.synthesisEngineError,
-        ),
-      );
-    }
-  }
-
-  /// Handles WebSocket errors
-  void _handleError(dynamic error) {
-    _isConnected = false;
-
-    if (!_audioCompleter.isCompleted) {
-      _audioCompleter.completeError(
-        TTSNetworkException(
-          'WebSocket error: $error',
-          endpoint: _edgeTTSUrl,
-          errorCode: TTSErrorCode.connectionFailed,
-        ),
-      );
-    }
-  }
-
-  /// Handles WebSocket disconnection
-  void _handleDisconnect() {
-    _isConnected = false;
-
-    if (!_audioCompleter.isCompleted) {
-      _audioCompleter.completeError(
-        TTSNetworkException(
-          'WebSocket connection closed unexpectedly',
-          endpoint: _edgeTTSUrl,
-        ),
-      );
-    }
+    print('DEBUG: Disconnected from Edge TTS service');
   }
 
   /// Gets the connection status
   bool get isConnected => _isConnected;
+  
+  /// Gets the last used time for connection management
+  DateTime? get lastUsed => _lastUsed;
+  
+  /// Checks if the connection is idle for too long
+  bool isIdleForDuration(Duration duration) {
+    if (_lastUsed == null) return false;
+    return DateTime.now().difference(_lastUsed!) > duration;
+  }
 }

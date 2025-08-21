@@ -164,6 +164,14 @@ class AlouetteTTSConfig {
         return 'Microsoft Server Speech Text to Speech Voice (ko-KR, SunHiNeural)';
       case 'zh-cn':
         return 'Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)';
+      case 'ru-ru':
+        return 'Microsoft Server Speech Text to Speech Voice (ru-RU, SvetlanaNeural)';
+      case 'el-gr':
+        return 'Microsoft Server Speech Text to Speech Voice (el-GR, AthinaNeural)';
+      case 'ar-sa':
+        return 'Microsoft Server Speech Text to Speech Voice (ar-SA, ZariyahNeural)';
+      case 'hi-in':
+        return 'Microsoft Server Speech Text to Speech Voice (hi-IN, SwaraNeural)';
       default:
         return 'Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)';
     }

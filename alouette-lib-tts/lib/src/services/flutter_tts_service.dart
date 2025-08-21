@@ -681,18 +681,27 @@ class FlutterTTSService implements ITTSService {
   Future<void> _applyConfiguration(AlouetteTTSConfig config) async {
     try {
       final flutterConfig = config.toFlutterTTSConfig();
+      final platform = _platformDetector.getCurrentPlatform();
 
-      // Set speech rate
-      await _flutterTts.setSpeechRate(flutterConfig['speechRate'] as double);
+      // Apply settings one by one with individual error handling
+      await _safelyApplySetting(() async {
+        await _flutterTts.setSpeechRate(flutterConfig['speechRate'] as double);
+      }, 'setSpeechRate');
 
-      // Set volume
-      await _flutterTts.setVolume(flutterConfig['volume'] as double);
+      await _safelyApplySetting(() async {
+        await _flutterTts.setVolume(flutterConfig['volume'] as double);
+      }, 'setVolume');
 
-      // Set pitch
-      await _flutterTts.setPitch(flutterConfig['pitch'] as double);
+      // Check if platform supports pitch control before trying to set it
+      if (_platformSupportsPitch(platform)) {
+        await _safelyApplySetting(() async {
+          await _flutterTts.setPitch(flutterConfig['pitch'] as double);
+        }, 'setPitch');
+      }
 
-      // Set language
-      await _flutterTts.setLanguage(flutterConfig['language'] as String);
+      await _safelyApplySetting(() async {
+        await _flutterTts.setLanguage(flutterConfig['language'] as String);
+      }, 'setLanguage');
 
       // Set voice if specified
       final voiceName = flutterConfig['voice'] as String?;
@@ -709,6 +718,35 @@ class FlutterTTSService implements ITTSService {
       await _updateAudioManagerConfig(config);
     } catch (e) {
       throw TTSException('Failed to apply configuration: $e');
+    }
+  }
+
+  /// Check if the current platform supports pitch control with FlutterTTS
+  bool _platformSupportsPitch(TTSPlatform platform) {
+    switch (platform) {
+      case TTSPlatform.android:
+      case TTSPlatform.ios:
+        // Mobile platforms generally support pitch control
+        return true;
+      case TTSPlatform.web:
+        // Web Speech API may have limited pitch support
+        return true;
+      case TTSPlatform.linux:
+      case TTSPlatform.macos:
+      case TTSPlatform.windows:
+        // Desktop platforms using FlutterTTS have limited pitch support
+        // This is based on the actual implementation capabilities
+        return false;
+    }
+  }
+
+  /// Safely apply a TTS setting with error handling
+  Future<void> _safelyApplySetting(Future<void> Function() setter, String settingName) async {
+    try {
+      await setter();
+    } catch (e) {
+      // Log the error but don't fail initialization for missing methods
+      _onError?.call('Warning: $settingName not supported on this platform: $e');
     }
   }
 

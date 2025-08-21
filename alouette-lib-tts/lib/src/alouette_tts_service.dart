@@ -68,12 +68,15 @@ class AlouetteTTSService implements ITTSService {
         // Use injected factory (mainly for testing)
         _underlyingService = await factory.createTTSService();
       } else {
-        // Create services directly without service locator for now
-        final ttsFactory = TTSFactory(_platformDetector);
+        // Create services directly with improved error handling
+        final ttsFactory = TTSFactory(
+          _platformDetector,
+          enableErrorRecovery: true, // Enable error recovery by default
+        );
         _underlyingService = await ttsFactory.createTTSService();
       }
 
-      // Initialize the underlying service
+      // Initialize the underlying service with enhanced error handling
       await _underlyingService!.initialize(
         onStart: () {
           _state = TTSState.playing;
@@ -97,6 +100,7 @@ class AlouetteTTSService implements ITTSService {
 
       _isInitialized = true;
     } catch (e) {
+      _state = TTSState.error;
       throw TTSInitializationException(
         'Failed to initialize Alouette TTS service: $e',
         'AlouetteTTS',
