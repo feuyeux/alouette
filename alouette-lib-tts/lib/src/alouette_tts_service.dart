@@ -12,6 +12,7 @@ import 'utils/text_preprocessor.dart';
 import 'utils/ssml_validator.dart';
 import 'utils/audio_file_manager.dart';
 import 'utils/audio_saver.dart';
+import 'utils/request_logger.dart';
 import 'services/edge_tts_service.dart';
 import 'services/flutter_tts_service.dart';
 import 'platform/platform_detector.dart';
@@ -39,6 +40,9 @@ class AlouetteTTSService implements ITTSService {
 
   /// Platform detector for dependency injection
   late final IPlatformDetector _platformDetector;
+
+  /// Request/response logger
+  final RequestLogger _requestLogger = RequestLogger();
 
   /// Creates a new Alouette TTS service instance
   AlouetteTTSService({
@@ -111,44 +115,15 @@ class AlouetteTTSService implements ITTSService {
 
   @override
   Future<void> speak(String text, {AlouetteTTSConfig? config}) async {
-    _ensureInitialized();
-
+    final effectiveConfig = config ?? currentConfig;
     try {
-      _state = TTSState.synthesizing;
-
-      // Get current platform for preprocessing
-      final platform = _platformDetector.getCurrentPlatform();
-
-      // Update config if provided
-      if (config != null) {
-        await _underlyingService!.updateConfig(config);
-      }
-
-      // Validate text is not empty first
-      if (text.trim().isEmpty) {
-        throw const TTSSynthesisException('Text cannot be empty', text: '');
-      }
-
-      // Handle long text by splitting into chunks first, then preprocess each chunk
-      final textChunks = TextPreprocessor.splitTextIntoChunks(text, platform);
-      final processedChunks = textChunks
-          .map((chunk) => _preprocessTextChunk(chunk, config, platform))
-          .toList();
-
-      if (processedChunks.length == 1) {
-        // Single chunk - process normally
-        await _underlyingService!.speak(processedChunks.first, config: config);
-      } else {
-        // Multiple chunks - process sequentially
-        await _speakTextChunks(processedChunks, config);
-      }
-    } catch (e) {
-      _state = TTSState.error;
-      throw TTSSynthesisException(
-        'Failed to speak text: $e',
-        text: text,
-        originalError: e,
-      );
+      final underlying = await _underlyingService;
+      await underlying?.updateConfig(effectiveConfig);
+      await underlying?.speak(text, config: effectiveConfig);
+    } catch (e, stackTrace) {
+      print('Error in AlouetteTTSService.speak: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
     }
   }
 
@@ -197,6 +172,12 @@ class AlouetteTTSService implements ITTSService {
     _ensureInitialized();
 
     try {
+      // Log request
+      await _requestLogger.logRequest({
+        'operation': 'synthesizeToAudio',
+        'text': text,
+        'config': config?.toEdgeTTSConfig() ?? _config.toEdgeTTSConfig(),
+      });
       _state = TTSState.synthesizing;
 
       // Update config if provided
@@ -209,8 +190,24 @@ class AlouetteTTSService implements ITTSService {
         config: config,
       );
       _state = TTSState.stopped;
+
+      // Log response
+      await _requestLogger.logResponse({
+        'operation': 'synthesizeToAudio',
+        'status': 'ok',
+        'requestedLanguage': config?.languageCode ?? _config.languageCode,
+        'audioSizeBytes': audioData.lengthInBytes,
+      });
+
       return audioData;
     } catch (e) {
+      // Log error
+      await _requestLogger.logResponse({
+        'operation': 'synthesizeToAudio',
+        'status': 'error',
+        'error': e.toString(),
+        'requestedLanguage': config?.languageCode ?? _config.languageCode,
+      });
       _state = TTSState.error;
       throw TTSSynthesisException(
         'Failed to synthesize audio: $e',

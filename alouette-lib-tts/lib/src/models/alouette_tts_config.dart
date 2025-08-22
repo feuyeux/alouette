@@ -145,35 +145,35 @@ class AlouetteTTSConfig {
   String _getDefaultEdgeVoiceForLanguage(String languageCode) {
     switch (languageCode.toLowerCase()) {
       case 'en-us':
-        return 'Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)';
+        return 'en-US-AriaNeural';
       case 'en-gb':
-        return 'Microsoft Server Speech Text to Speech Voice (en-GB, SoniaNeural)';
+        return 'en-GB-SoniaNeural';
       case 'es-es':
-        return 'Microsoft Server Speech Text to Speech Voice (es-ES, ElviraNeural)';
+        return 'es-ES-ElviraNeural';
       case 'fr-fr':
-        return 'Microsoft Server Speech Text to Speech Voice (fr-FR, DeniseNeural)';
+        return 'fr-FR-DeniseNeural';
       case 'de-de':
-        return 'Microsoft Server Speech Text to Speech Voice (de-DE, KatjaNeural)';
+        return 'de-DE-KatjaNeural';
       case 'it-it':
-        return 'Microsoft Server Speech Text to Speech Voice (it-IT, ElsaNeural)';
+        return 'it-IT-ElsaNeural';
       case 'pt-br':
-        return 'Microsoft Server Speech Text to Speech Voice (pt-BR, FranciscaNeural)';
+        return 'pt-BR-FranciscaNeural';
       case 'ja-jp':
-        return 'Microsoft Server Speech Text to Speech Voice (ja-JP, NanamiNeural)';
+        return 'ja-JP-NanamiNeural';
       case 'ko-kr':
-        return 'Microsoft Server Speech Text to Speech Voice (ko-KR, SunHiNeural)';
+        return 'ko-KR-SunHiNeural';
       case 'zh-cn':
-        return 'Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)';
+        return 'zh-CN-XiaoxiaoNeural';
       case 'ru-ru':
-        return 'Microsoft Server Speech Text to Speech Voice (ru-RU, SvetlanaNeural)';
+        return 'ru-RU-SvetlanaNeural';
       case 'el-gr':
-        return 'Microsoft Server Speech Text to Speech Voice (el-GR, AthinaNeural)';
+        return 'el-GR-AthinaNeural';
       case 'ar-sa':
-        return 'Microsoft Server Speech Text to Speech Voice (ar-SA, ZariyahNeural)';
+        return 'ar-SA-ZariyahNeural';
       case 'hi-in':
-        return 'Microsoft Server Speech Text to Speech Voice (hi-IN, SwaraNeural)';
+        return 'hi-IN-SwaraNeural';
       default:
-        return 'Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)';
+        return 'en-US-AriaNeural';
     }
   }
 

@@ -136,11 +136,9 @@ class EdgeTTSService implements ITTSService {
     try {
       final client = EdgeTTSWebSocketClient();
       _wsClientsByLanguage[lang] = client;
-      print('DEBUG: Pre-warming WebSocket connection for $lang...');
       await client.connect();
-      print('DEBUG: WebSocket connection pre-warmed successfully for $lang');
     } catch (e) {
-      print('DEBUG: Failed to pre-warm WebSocket connection: $e');
+      // WebSocket pre-warming failed, will fallback to command-line
     }
   }
 
@@ -638,10 +636,6 @@ class EdgeTTSService implements ITTSService {
     final stopwatch = Stopwatch()..start();
     final textLength = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml).length;
 
-    print('DEBUG: Starting synthesis for language: ${config.languageCode}');
-    print('DEBUG: Text length: $textLength');
-    print('DEBUG: SSML preview: ${ssml.substring(0, math.min(200, ssml.length))}...');
-
     try {
       // Ensure any global readiness (noop for per-language clients)
       await _ensureConnectionReady();
@@ -655,7 +649,6 @@ class EdgeTTSService implements ITTSService {
 
       // Try WebSocket synthesis using the per-language client
       try {
-        print('DEBUG: Attempting WebSocket synthesis for language $lang...');
         final result = await perLangClient.synthesize(ssml, config);
 
         _performanceMonitor?.recordSynthesis(
@@ -665,15 +658,11 @@ class EdgeTTSService implements ITTSService {
           metadata: {'method': 'websocket'},
         );
 
-        print('DEBUG: WebSocket synthesis successful');
         return result;
       } catch (e) {
-        print('DEBUG: WebSocket synthesis failed: $e');
-
         // Try command-line fallback if available
         if (_useCommandLineFallback && _cmdClient != null) {
           try {
-            print('DEBUG: Attempting command-line fallback...');
             final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
             final result = await _cmdClient!.synthesize(text, config);
 
@@ -684,11 +673,8 @@ class EdgeTTSService implements ITTSService {
               metadata: {'method': 'command_line_fallback'},
             );
 
-            print('DEBUG: Command-line fallback successful');
             return result;
           } catch (fallbackError) {
-            print('DEBUG: Command-line fallback also failed: $fallbackError');
-
             _performanceMonitor?.recordSynthesis(
               duration: stopwatch.elapsed,
               textLength: textLength,

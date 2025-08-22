@@ -9,7 +9,8 @@ class EdgeTTSSSMLGenerator {
     AlouetteTTSConfig config, {
     AlouetteVoice? voice,
   }) {
-    final voiceName =
+    // 优先使用配置中的voiceName，其次是voice对象，最后是根据languageCode的默认值
+    final voiceName = config.voiceName ?? 
         voice?.toEdgeTTSVoiceName() ??
         _getDefaultVoiceName(config.languageCode);
     final rate = _formatRate(config.speechRate);
@@ -74,49 +75,52 @@ class EdgeTTSSSMLGenerator {
   /// Gets default voice name for a language code
   static String _getDefaultVoiceName(String languageCode) {
     // Map common language codes to Edge TTS voice names
+    // Use the correct format that matches hello-edge-tts success pattern
     switch (languageCode.toLowerCase()) {
       case 'en-us':
-        return 'Microsoft Server Speech Text to Speech Voice (en-US, AriaNeural)';
+        return 'en-US-AriaNeural';
       case 'en-gb':
-        return 'Microsoft Server Speech Text to Speech Voice (en-GB, SoniaNeural)';
+        return 'en-GB-SoniaNeural';
       case 'en-au':
-        return 'Microsoft Server Speech Text to Speech Voice (en-AU, NatashaNeural)';
+        return 'en-AU-NatashaNeural';
       case 'en-ca':
-        return 'Microsoft Server Speech Text to Speech Voice (en-CA, ClaraNeural)';
+        return 'en-CA-ClaraNeural';
       case 'es-es':
-        return 'Microsoft Server Speech Text to Speech Voice (es-ES, ElviraNeural)';
+        return 'es-ES-ElviraNeural';
       case 'es-mx':
-        return 'Microsoft Server Speech Text to Speech Voice (es-MX, DaliaNeural)';
+        return 'es-MX-DaliaNeural';
       case 'fr-fr':
-        return 'Microsoft Server Speech Text to Speech Voice (fr-FR, DeniseNeural)';
+        return 'fr-FR-DeniseNeural';
       case 'fr-ca':
-        return 'Microsoft Server Speech Text to Speech Voice (fr-CA, SylvieNeural)';
+        return 'fr-CA-SylvieNeural';
       case 'de-de':
-        return 'Microsoft Server Speech Text to Speech Voice (de-DE, KatjaNeural)';
+        return 'de-DE-KatjaNeural';
       case 'it-it':
-        return 'Microsoft Server Speech Text to Speech Voice (it-IT, ElsaNeural)';
+        return 'it-IT-ElsaNeural';
       case 'pt-br':
-        return 'Microsoft Server Speech Text to Speech Voice (pt-BR, FranciscaNeural)';
+        return 'pt-BR-FranciscaNeural';
       case 'pt-pt':
-        return 'Microsoft Server Speech Text to Speech Voice (pt-PT, RaquelNeural)';
+        return 'pt-PT-RaquelNeural';
       case 'ru-ru':
-        return 'Microsoft Server Speech Text to Speech Voice (ru-RU, SvetlanaNeural)';
+        return 'ru-RU-SvetlanaNeural';
       case 'ja-jp':
-        return 'Microsoft Server Speech Text to Speech Voice (ja-JP, NanamiNeural)';
+        return 'ja-JP-NanamiNeural';
       case 'ko-kr':
-        return 'Microsoft Server Speech Text to Speech Voice (ko-KR, SunHiNeural)';
+        return 'ko-KR-SunHiNeural';
       case 'zh-cn':
-        return 'Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)';
+        return 'zh-CN-XiaoxiaoNeural';
       case 'zh-tw':
-        return 'Microsoft Server Speech Text to Speech Voice (zh-TW, HsiaoChenNeural)';
+        return 'zh-TW-HsiaoChenNeural';
       case 'ar':
       case 'ar-sa':
-        return 'Microsoft Server Speech Text to Speech Voice (ar-SA, ZariyahNeural)';
+        return 'ar-SA-ZariyahNeural';
       case 'hi-in':
-        return 'Microsoft Server Speech Text to Speech Voice (hi-IN, SwaraNeural)';
+        return 'hi-IN-SwaraNeural';
+      case 'el-gr':
+        return 'el-GR-AthinaNeural';
       default:
         // Fallback to US English
-        return 'Microsoft Server Speech Text to Speech Voice (en-US, AriaNeural)';
+        return 'en-US-AriaNeural';
     }
   }
 

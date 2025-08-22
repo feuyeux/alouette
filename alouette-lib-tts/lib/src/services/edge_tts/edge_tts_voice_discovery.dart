@@ -137,32 +137,9 @@ class EdgeTTSVoiceDiscovery {
 
       if (name == null || locale == null) return null;
 
-      // Determine voice quality
-      VoiceQuality quality = VoiceQuality.standard;
-      if (name.toLowerCase().contains('neural')) {
-        quality = VoiceQuality.neural;
-      } else if (name.toLowerCase().contains('premium')) {
-        quality = VoiceQuality.premium;
-      }
-
-      // Determine gender
-      VoiceGender voiceGender = VoiceGender.neutral;
-      if (gender != null) {
-        switch (gender.toLowerCase()) {
-          case 'male':
-            voiceGender = VoiceGender.male;
-            break;
-          case 'female':
-            voiceGender = VoiceGender.female;
-            break;
-          default:
-            voiceGender = VoiceGender.neutral;
-        }
-      }
-
-      // Extract country code from locale (e.g., 'en-US' -> 'US')
-      final localeParts = locale.split('-');
-      final countryCode = localeParts.length > 1 ? localeParts[1] : null;
+      final quality = _parseQuality(null, voiceName: name);
+      final voiceGender = _parseGender(gender);
+      final countryCode = _extractCountryCode(locale);
 
       return AlouetteVoice.fromPlatformData(
         id: shortName ?? name,
@@ -195,35 +172,9 @@ class EdgeTTSVoiceDiscovery {
       final gender = voiceInfo['gender'] as String? ?? 'neutral';
       final quality = voiceInfo['quality'] as String? ?? 'standard';
 
-      // Parse gender
-      VoiceGender voiceGender = VoiceGender.neutral;
-      switch (gender.toLowerCase()) {
-        case 'male':
-          voiceGender = VoiceGender.male;
-          break;
-        case 'female':
-          voiceGender = VoiceGender.female;
-          break;
-        default:
-          voiceGender = VoiceGender.neutral;
-      }
-
-      // Parse quality
-      VoiceQuality voiceQuality = VoiceQuality.standard;
-      switch (quality.toLowerCase()) {
-        case 'neural':
-          voiceQuality = VoiceQuality.neural;
-          break;
-        case 'premium':
-          voiceQuality = VoiceQuality.premium;
-          break;
-        default:
-          voiceQuality = VoiceQuality.standard;
-      }
-
-      // Extract country code from language
-      final languageParts = language.split('-');
-      final countryCode = languageParts.length > 1 ? languageParts[1] : null;
+      final voiceGender = _parseGender(gender);
+      final voiceQuality = _parseQuality(quality);
+      final countryCode = _extractCountryCode(language);
 
       return AlouetteVoice.fromPlatformData(
         id: voiceName,
@@ -257,8 +208,7 @@ class EdgeTTSVoiceDiscovery {
         quality: VoiceQuality.neural,
         isDefault: true,
         metadata: {
-          'edgeTTSName':
-              'Microsoft Server Speech Text to Speech Voice (en-US, AriaNeural)',
+          'edgeTTSName': 'en-US-AriaNeural',
           'supportsSSML': true,
         },
       ),
@@ -271,8 +221,7 @@ class EdgeTTSVoiceDiscovery {
         gender: VoiceGender.male,
         quality: VoiceQuality.neural,
         metadata: {
-          'edgeTTSName':
-              'Microsoft Server Speech Text to Speech Voice (en-US, GuyNeural)',
+          'edgeTTSName': 'en-US-GuyNeural',
           'supportsSSML': true,
         },
       ),
@@ -285,38 +234,7 @@ class EdgeTTSVoiceDiscovery {
         gender: VoiceGender.female,
         quality: VoiceQuality.neural,
         metadata: {
-          'edgeTTSName':
-              'Microsoft Server Speech Text to Speech Voice (en-GB, SoniaNeural)',
-          'supportsSSML': true,
-        },
-      ),
-
-      // Spanish voices
-      AlouetteVoice.fromPlatformData(
-        id: 'es-ES-ElviraNeural',
-        name: 'Elvira (Neural)',
-        languageCode: 'es-ES',
-        platform: TTSPlatform.windows,
-        countryCode: 'ES',
-        gender: VoiceGender.female,
-        quality: VoiceQuality.neural,
-        metadata: {
-          'edgeTTSName':
-              'Microsoft Server Speech Text to Speech Voice (es-ES, ElviraNeural)',
-          'supportsSSML': true,
-        },
-      ),
-      AlouetteVoice.fromPlatformData(
-        id: 'es-MX-DaliaNeural',
-        name: 'Dalia (Neural)',
-        languageCode: 'es-MX',
-        platform: TTSPlatform.windows,
-        countryCode: 'MX',
-        gender: VoiceGender.female,
-        quality: VoiceQuality.neural,
-        metadata: {
-          'edgeTTSName':
-              'Microsoft Server Speech Text to Speech Voice (es-MX, DaliaNeural)',
+          'edgeTTSName': 'en-GB-SoniaNeural',
           'supportsSSML': true,
         },
       ),
@@ -331,8 +249,20 @@ class EdgeTTSVoiceDiscovery {
         gender: VoiceGender.female,
         quality: VoiceQuality.neural,
         metadata: {
-          'edgeTTSName':
-              'Microsoft Server Speech Text to Speech Voice (fr-FR, DeniseNeural)',
+          'edgeTTSName': 'fr-FR-DeniseNeural',
+          'supportsSSML': true,
+        },
+      ),
+      AlouetteVoice.fromPlatformData(
+        id: 'fr-FR-HenriNeural',
+        name: 'Henri (Neural)',
+        languageCode: 'fr-FR',
+        platform: TTSPlatform.windows,
+        countryCode: 'FR',
+        gender: VoiceGender.male,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'fr-FR-HenriNeural',
           'supportsSSML': true,
         },
       ),
@@ -347,8 +277,196 @@ class EdgeTTSVoiceDiscovery {
         gender: VoiceGender.female,
         quality: VoiceQuality.neural,
         metadata: {
-          'edgeTTSName':
-              'Microsoft Server Speech Text to Speech Voice (de-DE, KatjaNeural)',
+          'edgeTTSName': 'de-DE-KatjaNeural',
+          'supportsSSML': true,
+        },
+      ),
+      AlouetteVoice.fromPlatformData(
+        id: 'de-DE-ConradNeural',
+        name: 'Conrad (Neural)',
+        languageCode: 'de-DE',
+        platform: TTSPlatform.windows,
+        countryCode: 'DE',
+        gender: VoiceGender.male,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'de-DE-ConradNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Spanish voices
+      AlouetteVoice.fromPlatformData(
+        id: 'es-ES-ElviraNeural',
+        name: 'Elvira (Neural)',
+        languageCode: 'es-ES',
+        platform: TTSPlatform.windows,
+        countryCode: 'ES',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'es-ES-ElviraNeural',
+          'supportsSSML': true,
+        },
+      ),
+      AlouetteVoice.fromPlatformData(
+        id: 'es-MX-DaliaNeural',
+        name: 'Dalia (Neural)',
+        languageCode: 'es-MX',
+        platform: TTSPlatform.windows,
+        countryCode: 'MX',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'es-MX-DaliaNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Italian voices
+      AlouetteVoice.fromPlatformData(
+        id: 'it-IT-ElsaNeural',
+        name: 'Elsa (Neural)',
+        languageCode: 'it-IT',
+        platform: TTSPlatform.windows,
+        countryCode: 'IT',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'it-IT-ElsaNeural',
+          'supportsSSML': true,
+        },
+      ),
+      AlouetteVoice.fromPlatformData(
+        id: 'it-IT-DiegoNeural',
+        name: 'Diego (Neural)',
+        languageCode: 'it-IT',
+        platform: TTSPlatform.windows,
+        countryCode: 'IT',
+        gender: VoiceGender.male,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'it-IT-DiegoNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Russian voices
+      AlouetteVoice.fromPlatformData(
+        id: 'ru-RU-SvetlanaNeural',
+        name: 'Svetlana (Neural)',
+        languageCode: 'ru-RU',
+        platform: TTSPlatform.windows,
+        countryCode: 'RU',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'ru-RU-SvetlanaNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Japanese voices
+      AlouetteVoice.fromPlatformData(
+        id: 'ja-JP-NanamiNeural',
+        name: 'Nanami (Neural)',
+        languageCode: 'ja-JP',
+        platform: TTSPlatform.windows,
+        countryCode: 'JP',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'ja-JP-NanamiNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Korean voices
+      AlouetteVoice.fromPlatformData(
+        id: 'ko-KR-SunHiNeural',
+        name: 'SunHi (Neural)',
+        languageCode: 'ko-KR',
+        platform: TTSPlatform.windows,
+        countryCode: 'KR',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'ko-KR-SunHiNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Chinese voices
+      AlouetteVoice.fromPlatformData(
+        id: 'zh-CN-XiaoxiaoNeural',
+        name: 'Xiaoxiao (Neural)',
+        languageCode: 'zh-CN',
+        platform: TTSPlatform.windows,
+        countryCode: 'CN',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'zh-CN-XiaoxiaoNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Portuguese voices
+      AlouetteVoice.fromPlatformData(
+        id: 'pt-BR-FranciscaNeural',
+        name: 'Francisca (Neural)',
+        languageCode: 'pt-BR',
+        platform: TTSPlatform.windows,
+        countryCode: 'BR',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'pt-BR-FranciscaNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Hindi voices
+      AlouetteVoice.fromPlatformData(
+        id: 'hi-IN-SwaraNeural',
+        name: 'Swara (Neural)',
+        languageCode: 'hi-IN',
+        platform: TTSPlatform.windows,
+        countryCode: 'IN',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'hi-IN-SwaraNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Arabic voices
+      AlouetteVoice.fromPlatformData(
+        id: 'ar-SA-ZariyahNeural',
+        name: 'Zariyah (Neural)',
+        languageCode: 'ar-SA',
+        platform: TTSPlatform.windows,
+        countryCode: 'SA',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'ar-SA-ZariyahNeural',
+          'supportsSSML': true,
+        },
+      ),
+
+      // Greek voices
+      AlouetteVoice.fromPlatformData(
+        id: 'el-GR-AthinaNeural',
+        name: 'Athina (Neural)',
+        languageCode: 'el-GR',
+        platform: TTSPlatform.windows,
+        countryCode: 'GR',
+        gender: VoiceGender.female,
+        quality: VoiceQuality.neural,
+        metadata: {
+          'edgeTTSName': 'el-GR-AthinaNeural',
           'supportsSSML': true,
         },
       ),
@@ -406,6 +524,49 @@ class EdgeTTSVoiceDiscovery {
     });
 
     return sortedVoices;
+  }
+
+  /// Helper method to parse gender from string
+  VoiceGender _parseGender(String? gender) {
+    if (gender == null) return VoiceGender.neutral;
+    switch (gender.toLowerCase()) {
+      case 'male':
+        return VoiceGender.male;
+      case 'female':
+        return VoiceGender.female;
+      default:
+        return VoiceGender.neutral;
+    }
+  }
+
+  /// Helper method to parse quality from string or voice name
+  VoiceQuality _parseQuality(String? quality, {String? voiceName}) {
+    if (quality != null) {
+      switch (quality.toLowerCase()) {
+        case 'neural':
+          return VoiceQuality.neural;
+        case 'premium':
+          return VoiceQuality.premium;
+        default:
+          return VoiceQuality.standard;
+      }
+    }
+    
+    if (voiceName != null) {
+      if (voiceName.toLowerCase().contains('neural')) {
+        return VoiceQuality.neural;
+      } else if (voiceName.toLowerCase().contains('premium')) {
+        return VoiceQuality.premium;
+      }
+    }
+    
+    return VoiceQuality.standard;
+  }
+
+  /// Helper method to extract country code from language
+  String? _extractCountryCode(String language) {
+    final parts = language.split('-');
+    return parts.length > 1 ? parts[1] : null;
   }
 
   /// Disposes of resources

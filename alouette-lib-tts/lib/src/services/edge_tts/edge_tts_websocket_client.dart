@@ -7,6 +7,7 @@ import '../../exceptions/tts_exception.dart';
 import '../../enums/tts_error_code.dart';
 import '../../models/alouette_tts_config.dart';
 import 'edge_tts_connection_pool.dart';
+import '../../utils/request_logger.dart';
 
 /// WebSocket client for Edge TTS service
 class EdgeTTSWebSocketClient {
@@ -28,7 +29,7 @@ class EdgeTTSWebSocketClient {
     // since direct WebSocket implementation has platform compatibility issues
     _isConnected = true;
     _lastUsed = DateTime.now();
-    print('DEBUG: Using edge-tts command line fallback instead of WebSocket');
+    // Using edge-tts command line fallback instead of WebSocket
   }
 
   /// Synthesizes text to audio using the WebSocket connection
@@ -60,26 +61,80 @@ class EdgeTTSWebSocketClient {
   // Create temporary file for output (use MP3 format)
   final tempDir = Directory.systemTemp;
   final tempFile = File('${tempDir.path}/tts_output_${DateTime.now().millisecondsSinceEpoch}.mp3');
-  // Log the local audio file path for debugging playback issues
-  print('DEBUG: edge-tts temp audio path -> ${tempFile.path}');
       
       try {
+        // Prepare logger and commands so we can record exact invocation and output
+        final logger = RequestLogger();
+        final voiceArg = config.voiceName ?? 'en-US-AriaNeural';
+        final cliCmd = [
+          'edge-tts',
+          '--voice',
+          voiceArg,
+          '--text',
+          text,
+          '--write-media',
+          tempFile.path,
+        ];
+
+        // Record intended CLI invocation (do not record full text if too long)
+        await logger.logRequest({
+          'operation': 'edge_cli_invoke',
+          'method': 'edge-tts',
+          'command': cliCmd,
+          'voice': voiceArg,
+          'textPreview': text.length > 200 ? text.substring(0, 200) + '...': text,
+          'tempFile': tempFile.path,
+        });
+
         // Try edge-tts command first
-        final result = await Process.run('edge-tts', [
-          '--voice', config.voiceName ?? 'Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)',
-          '--text', text,
-          '--write-media', tempFile.path,
-        ]);
-        
+        final result = await Process.run(cliCmd.first, cliCmd.sublist(1));
+
+        // Log stdout/stderr and exit code
+        await logger.logResponse({
+          'operation': 'edge_cli_invoke_result',
+          'method': 'edge-tts',
+          'exitCode': result.exitCode,
+          'stdout': result.stdout?.toString(),
+          'stderr': result.stderr?.toString(),
+          'voice': voiceArg,
+          'tempFile': tempFile.path,
+        });
+
         if (result.exitCode != 0) {
           // Try with python -m edge_tts if direct command fails
-          final pythonResult = await Process.run('python', [
-            '-m', 'edge_tts',
-            '--voice', config.voiceName ?? 'Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)',
-            '--text', text,
-            '--write-media', tempFile.path,
-          ]);
-          
+          final pythonCmd = [
+            'python',
+            '-m',
+            'edge_tts',
+            '--voice',
+            voiceArg,
+            '--text',
+            text,
+            '--write-media',
+            tempFile.path,
+          ];
+
+          await logger.logRequest({
+            'operation': 'edge_cli_invoke',
+            'method': 'python -m edge_tts',
+            'command': pythonCmd,
+            'voice': voiceArg,
+            'textPreview': text.length > 200 ? text.substring(0, 200) + '...': text,
+            'tempFile': tempFile.path,
+          });
+
+          final pythonResult = await Process.run(pythonCmd.first, pythonCmd.sublist(1));
+
+          await logger.logResponse({
+            'operation': 'edge_cli_invoke_result',
+            'method': 'python -m edge_tts',
+            'exitCode': pythonResult.exitCode,
+            'stdout': pythonResult.stdout?.toString(),
+            'stderr': pythonResult.stderr?.toString(),
+            'voice': voiceArg,
+            'tempFile': tempFile.path,
+          });
+
           if (pythonResult.exitCode != 0) {
             throw TTSSynthesisException('Edge TTS failed: ${pythonResult.stderr}', text: text);
           }
@@ -87,11 +142,9 @@ class EdgeTTSWebSocketClient {
         
         // Read the generated audio file
         if (await tempFile.exists()) {
-          print('DEBUG: edge-tts generated audio file found at ${tempFile.path}');
           final audioData = await tempFile.readAsBytes();
           return Uint8List.fromList(audioData);
         } else {
-          print('DEBUG: edge-tts did not generate audio at expected path: ${tempFile.path}');
           throw TTSSynthesisException('Audio file was not generated', text: text);
         }
         
@@ -102,12 +155,10 @@ class EdgeTTSWebSocketClient {
             final savedPath = '/tmp/alouette_last_tts.mp3';
             final savedFile = File(savedPath);
             await tempFile.copy(savedFile.path);
-            print('DEBUG: Copied temporary audio to $savedPath');
           } catch (e) {
-            print('DEBUG: Failed to copy temporary audio file for debugging: $e');
+            // Failed to copy temporary audio file for debugging
           }
 
-          print('DEBUG: Deleting temporary audio file ${tempFile.path}');
           await tempFile.delete();
         }
       }
@@ -134,7 +185,6 @@ class EdgeTTSWebSocketClient {
   Future<void> disconnect() async {
     if (!_isConnected) return;
     _isConnected = false;
-    print('DEBUG: Disconnected from Edge TTS service');
   }
 
   /// Gets the connection status

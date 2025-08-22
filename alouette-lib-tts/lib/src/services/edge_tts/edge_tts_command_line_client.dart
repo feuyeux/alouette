@@ -45,21 +45,17 @@ class EdgeTTSCommandLineClient {
     final outputFile = File(
       '${tempDir.path}/tts_output_${const Uuid().v4()}.mp3',
     );
-    // Log the local audio file path for debugging playback issues
-    print('DEBUG: edge-tts command-line temp audio path -> ${outputFile.path}');
 
     try {
       await _runEdgeTTSCommand(text, config, outputFile.path);
 
       if (!await outputFile.exists()) {
-        print('DEBUG: edge-tts command did not create file at ${outputFile.path}');
         throw TTSSynthesisException(
           'Edge TTS command failed to generate audio file',
           text: text,
         );
       }
 
-      print('DEBUG: edge-tts command generated audio at ${outputFile.path}');
       final audioData = await outputFile.readAsBytes();
       return Uint8List.fromList(audioData);
     } finally {
@@ -69,13 +65,11 @@ class EdgeTTSCommandLineClient {
           final savedPath = '/tmp/alouette_last_tts.mp3';
           final savedFile = File(savedPath);
           await outputFile.copy(savedFile.path);
-          print('DEBUG: Copied generated audio to $savedPath');
         } catch (e) {
-          print('DEBUG: Failed to copy generated audio for debugging: $e');
+          // Failed to copy generated audio for debugging
         }
 
         try {
-          print('DEBUG: Deleting temporary audio file ${outputFile.path}');
           await outputFile.delete();
         } catch (e) {
           // Ignore cleanup errors

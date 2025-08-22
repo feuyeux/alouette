@@ -202,8 +202,11 @@ class RetryTTSService implements ITTSService {
     if (baseConfig.voiceName != null) {
       try {
         final availableVoices = await _primaryService.getAvailableVoices();
+        
         final requestedVoiceExists = availableVoices.any(
-          (voice) => voice.name == baseConfig.voiceName,
+          (voice) => voice.name == baseConfig.voiceName ||
+                    voice.id == baseConfig.voiceName ||
+                    voice.toEdgeTTSVoiceName() == baseConfig.voiceName,
         );
 
         if (!requestedVoiceExists) {
@@ -215,9 +218,9 @@ class RetryTTSService implements ITTSService {
           );
 
           if (fallbackVoice != null) {
-            // Apply voice fallback
+            // Apply voice fallback - use the proper Edge TTS voice name format
             _effectiveConfig = baseConfig.copyWith(
-              voiceName: fallbackVoice.name,
+              voiceName: fallbackVoice.toEdgeTTSVoiceName(),
               languageCode: fallbackVoice.languageCode,
             );
             _voiceFallbackApplied = true;
@@ -226,8 +229,7 @@ class RetryTTSService implements ITTSService {
           }
         }
       } catch (e) {
-        // Voice availability check failed, proceed with original config
-        // The error recovery service will handle any subsequent errors
+        // If voice checking fails, continue with original config
       }
     }
 
