@@ -98,8 +98,7 @@ class SSMLValidator {
     final matches = tagRegex.allMatches(ssml).toList().reversed;
     
     for (final match in matches) {
-      final isClosing = match.group(1) == '/';
-      final tagName = match.group(2)!.toLowerCase();
+  final tagName = match.group(2)!.toLowerCase();
       
       if (!supportedTags.contains(tagName)) {
         // Remove the tag but keep the content

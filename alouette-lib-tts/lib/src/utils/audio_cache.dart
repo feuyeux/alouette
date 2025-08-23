@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:meta/meta.dart';
 import '../models/alouette_tts_config.dart';
-import '../enums/audio_format.dart';
+// audio_format not needed in this file
 
 /// Audio cache for storing synthesized audio data with content-based keys
 class AudioCache {

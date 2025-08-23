@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:meta/meta.dart';
 import '../models/alouette_voice.dart';
 import '../enums/tts_platform.dart';
 import '../interfaces/i_platform_detector.dart';
@@ -264,9 +263,6 @@ class VoiceCacheManager {
 }
 
 /// Extension to avoid awaiting futures in fire-and-forget scenarios
-extension _Unawaited on Future<void> {
-  void get unawaited {}
-}
 
 /// Helper function for unawaited futures
 void unawaited(Future<void> future) {

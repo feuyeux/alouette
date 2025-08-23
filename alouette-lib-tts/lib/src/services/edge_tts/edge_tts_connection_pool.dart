@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
-import 'package:uuid/uuid.dart';
+// uuid not needed while connection pool is a stub
 import '../../exceptions/tts_exception.dart';
 
 /// Connection pool for managing WebSocket connections to Edge TTS
@@ -12,7 +12,7 @@ class EdgeTTSConnectionPool {
 
   static const String _edgeTTSUrl =
       'wss://speech.platform.bing.com/consumer/speech/synthesize/realtimestreaming/edge/v1';
-  static const String _trustedClientToken = '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
+  // Trusted token not used in stub implementation
 
   final int _maxConnections;
   final Duration _connectionTimeout;
@@ -54,10 +54,12 @@ class EdgeTTSConnectionPool {
   /// Gets pool statistics
   Map<String, dynamic> getPoolStats() {
     return {
-      'maxConnections': _maxConnections,
-      'availableConnections': 0,
-      'activeConnections': 0,
-      'totalConnections': 0,
+  'maxConnections': _maxConnections,
+  'connectionTimeoutMs': _connectionTimeout.inMilliseconds,
+  'idleTimeoutMs': _idleTimeout.inMilliseconds,
+  'availableConnections': _availableConnections.length,
+  'activeConnections': _activeConnections.length,
+  'totalConnections': _availableConnections.length + _activeConnections.length,
     };
   }
 
@@ -68,6 +70,8 @@ class EdgeTTSConnectionPool {
   }
 
   /// Cleans up idle connections that have exceeded the idle timeout
+  /// Intentionally left unimplemented while pool is a stub.
+  // ignore: unused_element
   void _cleanupIdleConnections() {
     // Stub implementation
   }
@@ -95,17 +99,20 @@ class _PooledConnection {
   }
 
   /// Initializes the connection by sending configuration
+  // ignore: unused_element
   Future<void> _initialize() async {
     throw UnimplementedError('WebSocket not implemented yet');
   }
 
   /// Marks the connection as active
+  // ignore: unused_element
   void _markActive() {
     _isActive = true;
     _lastUsedTime = DateTime.now();
   }
 
   /// Marks the connection as idle
+  // ignore: unused_element
   void _markIdle() {
     _isActive = false;
     _lastUsedTime = DateTime.now();
@@ -124,6 +131,7 @@ class _PooledConnection {
   }
 
   /// Disposes of this connection
+  // ignore: unused_element
   Future<void> _dispose() async {
     if (_disposed) return;
     _disposed = true;

@@ -8,7 +8,7 @@ import 'models/tts_request.dart';
 import 'models/tts_result.dart';
 import 'models/tts_state.dart';
 import 'exceptions/tts_exception.dart';
-import 'utils/text_preprocessor.dart';
+// text_preprocessor not currently used; keep removed to avoid analyzer warning
 import 'utils/ssml_validator.dart';
 import 'utils/audio_file_manager.dart';
 import 'utils/audio_saver.dart';
@@ -607,6 +607,8 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Preprocesses a text chunk (without length validation)
+  // Intentionally left in place for future use. Marked unused to silence analyzer.
+  // ignore: unused_element
   String _preprocessTextChunk(
     String text,
     AlouetteTTSConfig? config,
@@ -739,6 +741,8 @@ class AlouetteTTSService implements ITTSService {
   }
 
   /// Speaks multiple text chunks sequentially
+  // Intentionally kept for future reference.
+  // ignore: unused_element
   Future<void> _speakTextChunks(
     List<String> chunks,
     AlouetteTTSConfig? config,

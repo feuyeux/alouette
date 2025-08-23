@@ -197,7 +197,6 @@ class EdgeTTSVoiceSelector {
             .toList();
             
       case VoiceUseCase.general:
-      default:
         // Return all compatible voices, sorted by quality
         languageVoices.sort((a, b) {
           final qualityOrder = [VoiceQuality.neural, VoiceQuality.premium, VoiceQuality.standard];

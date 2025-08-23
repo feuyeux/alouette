@@ -297,12 +297,9 @@ class AudioSaver {
     AudioFormat format,
     double quality,
   ) async {
-    // Get quality settings for the format
-    final qualitySettings = AudioFormatConverter.getQualitySettings(format, quality);
-    
-    // For now, return original data as quality adjustment requires audio processing libraries
-    // In a real implementation, this would re-encode the audio with quality settings
-    return audioData;
+  // For now, return original data as quality adjustment requires audio processing libraries
+  // In a real implementation, this would re-encode the audio with quality settings
+  return audioData;
   }
   
   /// Writes audio data to file with atomic operation

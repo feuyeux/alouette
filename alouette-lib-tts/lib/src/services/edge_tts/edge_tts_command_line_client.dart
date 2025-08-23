@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:uuid/uuid.dart';
 import '../../exceptions/tts_exception.dart';
 import '../../models/alouette_tts_config.dart';
 import '../../enums/tts_platform.dart';
@@ -43,7 +42,7 @@ class EdgeTTSCommandLineClient {
 
     final tempDir = Directory.systemTemp;
     final outputFile = File(
-      '${tempDir.path}/tts_output_${const Uuid().v4()}.mp3',
+      '${tempDir.path}/tts_output_${DateTime.now().millisecondsSinceEpoch}.mp3',
     );
 
     try {
@@ -271,16 +270,13 @@ class EdgeTTSCommandLineClient {
       // Find the voice in the output
       for (final line in output.split('\n')) {
         if (line.trim().startsWith('$voiceName:')) {
-          // Parse voice information from the line
-          final parts = line.split(',');
-          final info = <String, dynamic>{
+          // Return basic voice info inferred from the name
+          return {
             'name': voiceName,
             'language': _extractLanguageFromVoiceName(voiceName),
             'gender': _extractGenderFromVoiceName(voiceName),
             'quality': _extractQualityFromVoiceName(voiceName),
           };
-
-          return info;
         }
       }
 

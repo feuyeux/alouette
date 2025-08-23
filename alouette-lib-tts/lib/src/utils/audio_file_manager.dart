@@ -98,15 +98,11 @@ class AudioFileManager {
   static Future<bool> hasStorageSpace(String filePath, int requiredBytes) async {
     try {
       final file = File(filePath);
-      final directory = file.parent;
-      
-      // Get directory stats
-      final stat = await directory.stat();
-      
-      // Note: Dart doesn't provide direct access to free space
-      // This is a simplified check - in production, you'd use platform channels
-      // For now, we'll assume space is available if directory exists
-      return await directory.exists() || requiredBytes < 100 * 1024 * 1024; // 100MB limit
+  final directory = file.parent;
+  // Note: Dart doesn't provide direct access to free space
+  // This is a simplified check - in production, you'd use platform channels
+  // For now, we'll assume space is available if directory exists
+  return await directory.exists() || requiredBytes < 100 * 1024 * 1024; // 100MB limit
     } catch (e) {
       return false;
     }
