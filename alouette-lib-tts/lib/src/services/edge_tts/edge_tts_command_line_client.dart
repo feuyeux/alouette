@@ -12,22 +12,44 @@ class EdgeTTSCommandLineClient {
   /// Checks if edge-tts command is available on the system
   static Future<bool> isAvailable() async {
     try {
-      // On Windows, use 'where' instead of 'which'
+      // On Windows, use 'where' instead of 'which' to check if command exists
       if (Platform.isWindows) {
-        final result = await Process.run('where', [_edgeTTSCommand]);
-        return result.exitCode == 0;
+        try {
+          final result = await Process.run('where', [_edgeTTSCommand]);
+          if (result.exitCode == 0) {
+            return true;
+          }
+        } catch (e) {
+          // 'where' command failed, try direct execution
+        }
       } else {
-        final result = await Process.run('which', [_edgeTTSCommand]);
-        return result.exitCode == 0;
+        try {
+          final result = await Process.run('which', [_edgeTTSCommand]);
+          if (result.exitCode == 0) {
+            return true;
+          }
+        } catch (e) {
+          // 'which' command failed, try direct execution
+        }
+      }
+
+      // Try to run edge-tts with --help to see if it exists
+      // Even if it fails due to network issues, the command existing means it's available
+      try {
+        await Process.run(_edgeTTSCommand, ['--help']);
+        return true;
+      } catch (e) {
+        // Try with a minimal command that should show usage
+        try {
+          await Process.run(_edgeTTSCommand, []);
+          // If edge-tts exists, it will show usage and exit with non-zero, but that's OK
+          return true;
+        } catch (e) {
+          return false;
+        }
       }
     } catch (e) {
-      // Try alternative check - run the command with --help
-      try {
-        final result = await Process.run(_edgeTTSCommand, ['--help']);
-        return result.exitCode == 0;
-      } catch (e) {
-        return false;
-      }
+      return false;
     }
   }
 
@@ -289,10 +311,13 @@ class EdgeTTSCommandLineClient {
   /// Extracts language code from voice name
   String _extractLanguageFromVoiceName(String voiceName) {
     // Voice names often use formats like zh-CN-XiaoxiaoNeural; extract and normalize to lower-case
-  // Match e.g. zh-CN or en-US (case-insensitive) at start
-  final match = RegExp(r'^([a-z]{2}-[A-Z]{2})', caseSensitive: false).firstMatch(voiceName);
-  final code = match?.group(1) ?? 'en-us';
-  return code.toLowerCase();
+    // Match e.g. zh-CN or en-US (case-insensitive) at start
+    final match = RegExp(
+      r'^([a-z]{2}-[A-Z]{2})',
+      caseSensitive: false,
+    ).firstMatch(voiceName);
+    final code = match?.group(1) ?? 'en-us';
+    return code.toLowerCase();
   }
 
   /// Extracts gender from voice name

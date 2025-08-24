@@ -5,6 +5,9 @@ import '../enums/tts_platform.dart';
 import '../models/tts_state.dart';
 import '../services/edge_tts_service.dart';
 import '../services/flutter_tts_service.dart';
+// Conditional import for WebTTSService
+import '../services/web_tts_service_stub.dart'
+    if (dart.library.html) '../services/web_tts_service_impl.dart';
 import '../services/retry_tts_service.dart';
 import '../services/error_recovery_service.dart';
 import '../exceptions/tts_exceptions.dart';
@@ -28,11 +31,21 @@ class TTSFactory implements ITTSFactory {
     this._platformDetector, {
     ErrorRecoveryConfig? errorRecoveryConfig,
     bool enableErrorRecovery = true,
-  })  : _errorRecoveryConfig = errorRecoveryConfig,
-        _enableErrorRecovery = enableErrorRecovery;
+  }) : _errorRecoveryConfig = errorRecoveryConfig,
+       _enableErrorRecovery = enableErrorRecovery;
 
   @override
   Future<ITTSService> createTTSService() async {
+    // For web platform, return a browser-based implementation to avoid
+    // initializing native FlutterTTS which is unsupported on web.
+    if (_platformDetector.isWebPlatform()) {
+      try {
+        final webService = WebTTSService();
+        return webService;
+      } catch (e) {
+        // Fall through to fallback behavior and let errors surface
+      }
+    }
     // Return cached resilient service if available and not disposed
     if (_cachedResilientService != null &&
         _cachedResilientService!.currentState != TTSState.disposed) {
@@ -44,20 +57,30 @@ class TTSFactory implements ITTSFactory {
     try {
       ITTSService primaryService;
 
-      // For desktop platforms (including Linux), prioritize Edge TTS for better quality
+      // For desktop platforms (Windows, Linux, macOS), prioritize Edge TTS
+      // Windows especially should use Edge TTS instead of Flutter TTS
       if (platform.isDesktop) {
         try {
-          // Try Edge TTS first on desktop platforms
+          // Try Edge TTS first on desktop platforms, especially Windows
           final isEdgeAvailable = await _platformDetector.isEdgeTTSAvailable();
+          print(
+            'Edge TTS availability check: $isEdgeAvailable on ${platform.platformName}',
+          );
           if (isEdgeAvailable) {
+            print('Creating Edge TTS service for ${platform.platformName}');
             primaryService = await _createRawEdgeTTSService();
           } else {
+            print(
+              'Edge TTS not available, falling back to Flutter TTS for ${platform.platformName}',
+            );
             // If Edge TTS is not available, fallback to Flutter TTS
             primaryService = await _createRawFlutterTTSService();
           }
         } catch (edgeError) {
+          print('Edge TTS initialization failed: $edgeError');
           // If Edge TTS fails on desktop, try Flutter TTS as fallback
           try {
+            print('Falling back to Flutter TTS after Edge TTS error');
             primaryService = await _createRawFlutterTTSService();
           } catch (flutterError) {
             // Both services failed

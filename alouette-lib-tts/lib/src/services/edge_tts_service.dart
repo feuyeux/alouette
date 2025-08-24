@@ -67,6 +67,7 @@ class EdgeTTSService implements ITTSService {
     AlouetteTTSConfig? config,
   }) async {
     try {
+      print('Initializing Edge TTS service...');
       _onStart = onStart;
       _onComplete = onComplete;
       _onError = onError;
@@ -80,7 +81,9 @@ class EdgeTTSService implements ITTSService {
 
       _state = TTSState.ready;
       _isInitialized = true;
+      print('Edge TTS service initialized successfully');
     } catch (e) {
+      print('Edge TTS service initialization failed: $e');
       _state = TTSState.error;
       _onError?.call('Failed to initialize Edge TTS service: $e');
       rethrow;
@@ -151,9 +154,9 @@ class EdgeTTSService implements ITTSService {
       final effectiveConfig = config ?? _config;
       final audioData = await synthesizeToAudio(text, config: effectiveConfig);
 
-  // Try to play the audio data using a system player if available.
-  _state = TTSState.playing;
-  await _playAudioData(audioData, text);
+      // Try to play the audio data using a system player if available.
+      _state = TTSState.playing;
+      await _playAudioData(audioData, text);
     } catch (e) {
       _state = TTSState.error;
       _onError?.call('Speech synthesis failed: $e');
@@ -174,12 +177,12 @@ class EdgeTTSService implements ITTSService {
         ssml,
         effectiveConfig,
       );
-  final audioData = await _synthesizeSSML(processedSSML, effectiveConfig);
+      final audioData = await _synthesizeSSML(processedSSML, effectiveConfig);
 
-  // Play audio data
-  _state = TTSState.playing;
-  final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
-  await _playAudioData(audioData, text);
+      // Play audio data
+      _state = TTSState.playing;
+      final text = EdgeTTSSSMLGenerator.extractTextFromSSML(ssml);
+      await _playAudioData(audioData, text);
     } catch (e) {
       _state = TTSState.error;
       _onError?.call('SSML synthesis failed: $e');
@@ -214,7 +217,8 @@ class EdgeTTSService implements ITTSService {
       _state = TTSState.synthesizing;
 
       // Use cache key based on text + language + voice
-      final cacheKey = '${effectiveConfig.languageCode}::${effectiveConfig.voiceName ?? ''}::${text.hashCode}';
+      final cacheKey =
+          '${effectiveConfig.languageCode}::${effectiveConfig.voiceName ?? ''}::${text.hashCode}';
 
       // Check in-memory cache first
       if (_audioCache.containsKey(cacheKey)) {
@@ -299,7 +303,9 @@ class EdgeTTSService implements ITTSService {
   /// a suitable player (mpv/ffplay/aplay/paplay/xdg-open). Emits onComplete when done.
   Future<void> _playAudioData(Uint8List audioData, String textHint) async {
     final tempDir = Directory.systemTemp;
-    final tempFile = File('${tempDir.path}/alouette_play_${DateTime.now().millisecondsSinceEpoch}.mp3');
+    final tempFile = File(
+      '${tempDir.path}/alouette_play_${DateTime.now().millisecondsSinceEpoch}.mp3',
+    );
     try {
       await tempFile.writeAsBytes(audioData);
 
@@ -316,7 +322,10 @@ class EdgeTTSService implements ITTSService {
       }
 
       // Spawn player process
-      final proc = await Process.start(player.executable, player.args(tempFile.path));
+      final proc = await Process.start(
+        player.executable,
+        player.args(tempFile.path),
+      );
       _currentAudioProcess = proc;
 
       // When process exits, mark complete
@@ -586,8 +595,8 @@ class EdgeTTSService implements ITTSService {
 
   /// Ensures WebSocket connection is ready, reconnecting if necessary
   Future<void> _ensureConnectionReady() async {
-  // No-op: individual per-language clients are managed in _synthesizeSSML
-  return;
+    // No-op: individual per-language clients are managed in _synthesizeSSML
+    return;
   }
 
   @override
@@ -683,7 +692,10 @@ class EdgeTTSService implements ITTSService {
             );
 
             if (e is TTSException) rethrow;
-            throw TTSSynthesisException('Failed to synthesize SSML: $e', text: ssml);
+            throw TTSSynthesisException(
+              'Failed to synthesize SSML: $e',
+              text: ssml,
+            );
           }
         }
 
@@ -695,7 +707,10 @@ class EdgeTTSService implements ITTSService {
         );
 
         if (e is TTSException) rethrow;
-        throw TTSSynthesisException('Failed to synthesize SSML: $e', text: ssml);
+        throw TTSSynthesisException(
+          'Failed to synthesize SSML: $e',
+          text: ssml,
+        );
       }
     } finally {
       stopwatch.stop();

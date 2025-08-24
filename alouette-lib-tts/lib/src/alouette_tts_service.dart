@@ -118,8 +118,42 @@ class AlouetteTTSService implements ITTSService {
     final effectiveConfig = config ?? currentConfig;
     try {
       final underlying = await _underlyingService;
-      await underlying?.updateConfig(effectiveConfig);
-      await underlying?.speak(text, config: effectiveConfig);
+
+      // On web, some voice names (e.g. cloud neural voices like
+      // 'ar-SA-ZariyahNeural' or 'el-GR-AthinaNeural') are not available as
+      // browser voices. For Arabic/Greek requests, consult the runtime
+      // available voices and replace or clear the configured voiceName so
+      // the browser TTS can select a suitable local voice when possible.
+      try {
+        final platform = _platformDetector.getCurrentPlatform();
+        if (platform == TTSPlatform.web && underlying != null) {
+          final langLower = (effectiveConfig.languageCode ?? '').toLowerCase();
+          if (langLower.startsWith('ar') || langLower.startsWith('el')) {
+            try {
+              final available = await underlying.getVoicesByLanguage(effectiveConfig.languageCode);
+              if (available.isNotEmpty) {
+                // Prefer the runtime voice name if provided
+                final runtimeName = available.first.name.isNotEmpty ? available.first.name : available.first.id;
+                // Use a copied config with the runtime voice name
+                config = effectiveConfig.copyWith(voiceName: runtimeName);
+              } else {
+                // No browser/local voices for this language — clear the voiceName
+                // so the web implementation can attempt language-only matching.
+                config = effectiveConfig.copyWith(voiceName: null);
+              }
+            } catch (_) {
+              // If querying voices fails, leave the config as-is and let
+              // the underlying service handle the fallback.
+            }
+          }
+        }
+      } catch (_) {
+        // ignore platform-detection failures
+      }
+
+      final finalConfig = config ?? effectiveConfig;
+      await underlying?.updateConfig(finalConfig);
+      await underlying?.speak(text, config: finalConfig);
     } catch (e, stackTrace) {
       print('Error in AlouetteTTSService.speak: $e');
       print('Stack trace: $stackTrace');
@@ -833,22 +867,30 @@ class AlouetteTTSService implements ITTSService {
   Map<String, dynamic> getTTSEngineInfo() {
     final platform = _platformDetector.getCurrentPlatform();
 
-    // Determine engine type based on platform and availability
-    String engineType;
-    String engineName;
-    String description;
+    // 优先根据实际 underlyingService 类型判断
+    String engineType = 'unknown';
+    String engineName = 'Unknown';
+    String description = '';
 
-    if (platform.isDesktop) {
-      // On desktop, check if Edge TTS is likely being used
-      // This is a reasonable assumption based on the factory logic
+    if (_underlyingService is EdgeTTSService) {
       engineType = 'edge-tts';
       engineName = 'Microsoft Edge TTS';
       description = 'High-quality neural voices powered by Microsoft Edge TTS';
-    } else {
-      // On mobile and web, Flutter TTS is used
+    } else if (_underlyingService is FlutterTTSService) {
       engineType = 'flutter-tts';
       engineName = 'Flutter TTS';
       description = 'Cross-platform TTS using native platform voices';
+    } else {
+      // fallback: 按平台类型推断
+      if (platform.isDesktop) {
+        engineType = 'edge-tts';
+        engineName = 'Microsoft Edge TTS';
+        description = 'High-quality neural voices powered by Microsoft Edge TTS';
+      } else {
+        engineType = 'flutter-tts';
+        engineName = 'Flutter TTS';
+        description = 'Cross-platform TTS using native platform voices';
+      }
     }
 
     return {

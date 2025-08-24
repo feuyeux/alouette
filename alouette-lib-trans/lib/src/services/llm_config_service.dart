@@ -119,16 +119,16 @@ class LLMConfigService {
   /// Auto-detect LLM configuration by testing common endpoints
   Future<LLMConfig?> autoDetectConfig() async {
     final commonConfigs = [
-      // Ollama configurations
+      // Ollama configurations with qwen2.5 as preferred model
       LLMConfig(
         provider: 'ollama',
         serverUrl: 'http://localhost:11434',
-        selectedModel: '',
+        selectedModel: 'qwen2.5:latest',
       ),
       LLMConfig(
         provider: 'ollama',
         serverUrl: 'http://127.0.0.1:11434',
-        selectedModel: '',
+        selectedModel: 'qwen2.5:latest',
       ),
       // LM Studio configurations
       LLMConfig(
@@ -147,8 +147,28 @@ class LLMConfigService {
       try {
         final status = await testConnection(config);
         if (status.success && _availableModels.isNotEmpty) {
-          // Return config with the first available model selected
-          return config.copyWith(selectedModel: _availableModels.first);
+          // Prefer qwen2.5 models if available
+          String selectedModel = _availableModels.first;
+
+          // Look for qwen2.5 models (various versions)
+          final qwenModels = _availableModels
+              .where((model) => model.toLowerCase().contains('qwen2.5'))
+              .toList();
+
+          if (qwenModels.isNotEmpty) {
+            // Prefer qwen2.5:latest, then qwen2.5:7b, then any qwen2.5
+            if (qwenModels.any((m) => m.contains('latest'))) {
+              selectedModel = qwenModels.firstWhere(
+                (m) => m.contains('latest'),
+              );
+            } else if (qwenModels.any((m) => m.contains('7b'))) {
+              selectedModel = qwenModels.firstWhere((m) => m.contains('7b'));
+            } else {
+              selectedModel = qwenModels.first;
+            }
+          }
+
+          return config.copyWith(selectedModel: selectedModel);
         }
       } catch (e) {
         // Continue to next configuration
