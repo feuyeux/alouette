@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import '../interfaces/i_tts_service.dart';
-import '../interfaces/i_tts_factory.dart';
 import '../interfaces/i_platform_detector.dart';
 import '../models/alouette_tts_config.dart';
 import '../models/alouette_voice.dart';
@@ -74,7 +73,6 @@ class ErrorRecoveryConfig {
 /// Service for handling automatic error recovery and retry logic
 class ErrorRecoveryService {
   final ErrorRecoveryConfig _config;
-  final ITTSFactory _ttsFactory;
   final IPlatformDetector _platformDetector;
   final Random _random = Random();
 
@@ -91,10 +89,8 @@ class ErrorRecoveryService {
 
   ErrorRecoveryService({
     ErrorRecoveryConfig? config,
-    required ITTSFactory ttsFactory,
     required IPlatformDetector platformDetector,
   })  : _config = config ?? const ErrorRecoveryConfig(),
-        _ttsFactory = ttsFactory,
         _platformDetector = platformDetector;
 
   /// Executes an operation with automatic retry and recovery
@@ -304,49 +300,17 @@ class ErrorRecoveryService {
   /// Gets a fallback TTS service for the given primary service
   Future<ITTSService?> _getFallbackService(ITTSService primaryService) async {
     final currentPlatform = _platformDetector.getCurrentPlatform();
-
-    // Determine fallback platform
-    TTSPlatform? fallbackPlatform;
-
-    switch (currentPlatform) {
-      case TTSPlatform.linux:
-      case TTSPlatform.macos:
-      case TTSPlatform.windows:
-        // Desktop platforms: fallback from EdgeTTS to FlutterTTS
-        fallbackPlatform = currentPlatform;
-        break;
-
-      case TTSPlatform.android:
-      case TTSPlatform.ios:
-      case TTSPlatform.web:
-        // Mobile/web platforms: no fallback available (already using FlutterTTS)
-        return null;
-    }
-
-    // Check if we already have a cached fallback service
-    if (_fallbackServices.containsKey(fallbackPlatform)) {
-      return _fallbackServices[fallbackPlatform];
-    }
-
-    try {
-      // Create fallback service (FlutterTTS for desktop platforms)
-      final fallbackService = await _ttsFactory.createFlutterTTSService();
-
-      // Initialize the fallback service
-      await fallbackService.initialize(
-        onStart: () {},
-        onComplete: () {},
-        onError: (error) {},
-      );
-
-      // Cache the fallback service
-      _fallbackServices[fallbackPlatform] = fallbackService;
-
-      return fallbackService;
-    } catch (e) {
-      // Fallback service creation failed
+    // Policy: desktop platforms MUST use Edge TTS. Do not provide a
+    // platform-level fallback to Flutter TTS on desktop. Returning null
+    // ensures that callers will not attempt to create or switch to
+    // FlutterTTS when running on Linux / macOS / Windows.
+    if (currentPlatform.isDesktop) {
       return null;
     }
+
+    // For non-desktop platforms (mobile/web) there is no alternate
+    // platform-level fallback available — return null.
+    return null;
   }
 
   /// Gets cached voices for a service, refreshing if necessary

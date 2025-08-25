@@ -96,11 +96,15 @@ class PlatformDetector implements IPlatformDetector {
   Future<List<String>> getAvailableTTSEngines() async {
     final platform = getCurrentPlatform();
     final engines = <String>[];
-    
-    // Add flutter-tts as it's available on all platforms
-    engines.add('flutter-tts');
-    
-    // Add edge-tts if available (desktop platforms)
+
+    // Flutter TTS is only advertised for non-desktop platforms (mobile/web).
+    // All desktop platforms (Linux, macOS, Windows) should prefer edge-tts.
+    if (!platform.isDesktop) {
+      engines.add('flutter-tts');
+    }
+
+    // Add edge-tts when available (desktop platforms). On Linux this will be the
+    // preferred (and required) implementation.
     if (platform.isDesktop && await isEdgeTTSAvailable()) {
       engines.add('edge-tts');
     }

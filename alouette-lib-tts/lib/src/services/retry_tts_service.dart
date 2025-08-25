@@ -245,12 +245,10 @@ class RetryTTSServiceFactory {
   static RetryTTSService create(
     ITTSService primaryService, {
     ErrorRecoveryConfig? errorRecoveryConfig,
-    required dynamic ttsFactory,
     required dynamic platformDetector,
   }) {
     final errorRecoveryService = ErrorRecoveryService(
       config: errorRecoveryConfig,
-      ttsFactory: ttsFactory,
       platformDetector: platformDetector,
     );
 
@@ -260,12 +258,10 @@ class RetryTTSServiceFactory {
   /// Creates a retry TTS service with default error recovery settings
   static RetryTTSService createDefault(
     ITTSService primaryService, {
-    required dynamic ttsFactory,
     required dynamic platformDetector,
   }) {
     return create(
       primaryService,
-      ttsFactory: ttsFactory,
       platformDetector: platformDetector,
     );
   }
@@ -273,8 +269,7 @@ class RetryTTSServiceFactory {
   /// Creates a retry TTS service with fast retry settings
   static RetryTTSService createFast(
     ITTSService primaryService, {
-    required dynamic ttsFactory,
-    required dynamic platformDetector,
+  required dynamic platformDetector,
   }) {
     final aggressiveConfig = const ErrorRecoveryConfig(
       maxRetries: 5,
@@ -289,17 +284,15 @@ class RetryTTSServiceFactory {
 
     return create(
       primaryService,
-      errorRecoveryConfig: aggressiveConfig,
-      ttsFactory: ttsFactory,
-      platformDetector: platformDetector,
+  errorRecoveryConfig: aggressiveConfig,
+  platformDetector: platformDetector,
     );
   }
 
   /// Creates a retry TTS service with safe retry settings
   static RetryTTSService createSafe(
     ITTSService primaryService, {
-    required dynamic ttsFactory,
-    required dynamic platformDetector,
+  required dynamic platformDetector,
   }) {
     final conservativeConfig = const ErrorRecoveryConfig(
       maxRetries: 1,
@@ -315,8 +308,7 @@ class RetryTTSServiceFactory {
     return create(
       primaryService,
       errorRecoveryConfig: conservativeConfig,
-      ttsFactory: ttsFactory,
-      platformDetector: platformDetector,
+  platformDetector: platformDetector,
     );
   }
 }
