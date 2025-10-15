@@ -2,11 +2,8 @@ name: Build Windows
 
 on:
   push:
-    branches:
-      - main
-      - master
     tags:
-      - "*"
+      - 'v*'  # 当推送 v* 标签时触发（如 v1.0.0）
   workflow_dispatch:
   workflow_call:
 
