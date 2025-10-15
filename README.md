@@ -2,6 +2,30 @@
 
 A comprehensive Flutter ecosystem for AI-powered translation and text-to-speech functionality, built with a modular architecture that eliminates code duplication and follows Flutter best practices.
 
+## 📺 Demo
+
+<div align="center">
+  <a href="https://www.bilibili.com/video/BV14y4tz3EKr/">
+    <img src="https://i0.hdslb.com/bfs/archive/placeholder.jpg" alt="Alouette Demo Video" width="600">
+  </a>
+  <br>
+  <strong><a href="https://www.bilibili.com/video/BV14y4tz3EKr/">🎬 Click to Watch Demo Video</a></strong>
+</div>
+
+<!-- Bilibili 嵌入播放器 (在支持 iframe 的环境中显示) -->
+<div align="center">
+  <iframe src="//player.bilibili.com/player.html?bvid=BV14y4tz3EKr&page=1&high_quality=1&danmaku=0" 
+          scrolling="no" 
+          border="0" 
+          frameborder="no" 
+          framespacing="0" 
+          allowfullscreen="true" 
+          width="600" 
+          height="450"
+          style="max-width: 100%;">
+  </iframe>
+</div>
+
 ## 🏗️ Architecture Overview
 
 Alouette follows a layered architecture with clear separation of concerns:
@@ -27,7 +51,7 @@ Platform Layer
 
 Alouette supports 12+ languages with high-quality neural voices
 
-1. 🇨🇳 **中文**  Chinese (zh-CN): 这是中文语音合成技术的演示。
+1. 🇨🇳 **中文** Chinese (zh-CN): 这是中文语音合成技术的演示。
 2. 🇺🇸 **English** (en-US): This is a demonstration of TTS in English.
 3. 🇩🇪 **Deutsch** German (de-DE): Dies ist eine Demonstration der deutschen Sprachsynthese-Technologie.
 4. 🇫🇷 **Français** French (fr-FR): Ceci est une démonstration de la technologie de synthèse vocale française.
@@ -159,40 +183,6 @@ cd alouette_app_trans
 cd alouette_app_tts
 .\run_app.ps1
 ```
-
-**Platform-Specific Notes:**
-
-- **macOS**: Ensure Xcode is installed for iOS development
-- **Windows**: Ensure Visual Studio with C++ tools is installed
-- **Linux**: Install development packages: `sudo apt-get install clang cmake ninja-build pkg-config libgtk-3-dev`
-- **Android**: Use the automated setup script - see [Android Emulator Setup Guide](docs/ANDROID_EMULATOR_SETUP.md)
-- **All Platforms**: Use `flutter doctor` to verify your development environment
-
-### 🤖 Android Development
-
-For Android development, we provide an automated setup script that configures an ARM64 emulator optimized for Apple Silicon Macs:
-
-```bash
-# Quick setup (one-time installation)
-./setup_android_emulator.sh install
-
-# Start the emulator
-./setup_android_emulator.sh start
-
-# Run your app
-cd alouette_app
-flutter run -d emulator-5554
-```
-
-📖 **Full documentation**: [Android Emulator Setup Guide](docs/ANDROID_EMULATOR_SETUP.md)
-
-**Features:**
-
-- ✅ Automatic ARM64/x86_64 architecture detection
-- ✅ Optimized for Apple Silicon (M1/M2/M3) Macs
-- ✅ Pre-configured with Aliyun mirrors for faster downloads in China
-- ✅ Pixel 7 device profile with Google Play support
-- ✅ One-command installation and startup
 
 ## Acknowledgments
 
