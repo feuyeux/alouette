@@ -1,0 +1,30 @@
+name: alouette_lib_trans
+description: A Flutter library for AI-powered translation functionality with support for multiple LLM providers.
+version: 0.0.1
+homepage: https://github.com/your-org/alouette-lib-trans
+
+environment:
+  sdk: ">=3.8.1 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # HTTP client for LLM provider communication
+  http: ^1.5.0
+  # Meta annotations for better code analysis
+  meta: ^1.16.0
+  # Standard logging library
+  logger: ^2.6.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mockito: ^5.5.0
+  http_mock_adapter: ^0.6.1
+  build_runner: ^2.7.1
+  test: ^1.26.2
+
+flutter:
+  # This package is a Dart package, not a Flutter plugin

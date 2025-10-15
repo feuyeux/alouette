@@ -1,0 +1,60 @@
+name: Build Android
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:  # 允许手动触发
+  workflow_call:  # 允许被其他 workflow 调用
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [alouette_app, alouette_app_trans, alouette_app_tts]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      
+      - name: Get dependencies
+        run: |
+          cd ${{ matrix.app }}
+          flutter pub get
+      
+      - name: Build Android APK
+        run: |
+          cd ${{ matrix.app }}
+          flutter build apk --release
+      
+      - name: Build Android App Bundle
+        run: |
+          cd ${{ matrix.app }}
+          flutter build appbundle --release
+      
+      - name: Rename artifacts
+        run: |
+          cp ${{ matrix.app }}/build/app/outputs/flutter-apk/app-release.apk ${{ matrix.app }}/${{ matrix.app }}-android.apk
+          cp ${{ matrix.app }}/build/app/outputs/bundle/release/app-release.aab ${{ matrix.app }}/${{ matrix.app }}-android.aab
+      
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-android-apk
+          path: ${{ matrix.app }}/${{ matrix.app }}-android.apk
+      
+      - name: Upload Android AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-android-aab
+          path: ${{ matrix.app }}/${{ matrix.app }}-android.aab

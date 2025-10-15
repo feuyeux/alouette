@@ -1,0 +1,41 @@
+name: alouette_lib_tts
+description: A multi-platform TTS library supporting Edge TTS and Flutter TTS with automatic platform detection
+version: 0.0.1
+
+environment:
+  sdk: ">=3.8.1 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Flutter TTS for mobile and web platforms
+  flutter_tts: ^4.2.3
+  # Audio player for in-app audio playback
+  audioplayers: ^6.5.1
+  # Meta annotations for better code analysis
+  meta: ^1.16.0
+  # Path utilities for file operations
+  path: ^1.9.1
+  # Path provider for temporary file storage
+  path_provider: ^2.1.5
+  # Standard logging library
+  logger: ^2.6.2
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mockito: ^5.5.0
+  build_runner: ^2.7.1
+  test: ^1.26.2
+
+flutter:

@@ -1,0 +1,89 @@
+name: Build Windows
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "*"
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        app: [alouette_app, alouette_app_trans, alouette_app_tts]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: "3.22.x"
+
+      - name: Get dependencies
+        run: |
+          cd ${{ matrix.app }}
+          flutter clean
+          flutter pub get
+
+      - name: Build Windows
+        shell: pwsh
+        run: |
+          cd ${{ matrix.app }}
+          
+          # First build attempt
+          flutter build windows --release --verbose 2>&1 | Tee-Object -Variable output
+          
+          # Fix flutter_tts issues
+          if ($LASTEXITCODE -ne 0 -and $output -match "flutter_tts") {
+            Write-Host "Detected flutter_tts error, applying fix..." -ForegroundColor Yellow
+            
+            $cmake = "windows\flutter\ephemeral\.plugin_symlinks\flutter_tts\windows\CMakeLists.txt"
+            if (Test-Path $cmake) {
+              $content = Get-Content $cmake -Raw
+              
+              # Fix CMake syntax errors
+              $content = $content -replace '(?m)^\s*ARGS\s+install.*$', ''
+              $content = $content -replace '(####\s*NuGet import end\s*####)\s*\)', '$1'
+              $content = $content -replace '(\s)install\s+TARGETS\s', '$1install(TARGETS '
+              $content = $content -replace '(\s)install\s+FILES\s', '$1install(FILES '
+              
+              # Fix missing WindowsApp.lib (WinRT) link
+              if ($content -notmatch 'WindowsApp\.lib') {
+                $linkLine = 'target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin)'
+                $newLinkLine = $linkLine + "`ntarget_link_libraries(`${PLUGIN_NAME} PRIVATE WindowsApp.lib)"
+                $content = $content -replace [regex]::Escape($linkLine), $newLinkLine
+              }
+              
+              $content | Set-Content $cmake -NoNewline
+              Write-Host "Applied flutter_tts fixes" -ForegroundColor Green
+              
+              Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+              flutter build windows --release --verbose
+            } else {
+              exit 1
+            }
+          } elseif ($LASTEXITCODE -ne 0) {
+            exit 1
+          }
+
+      - name: Create Windows Archive
+        run: |
+          cd ${{ matrix.app }}/build/windows/x64/runner/Release
+          Compress-Archive -Path * -DestinationPath ../../../../../${{ matrix.app }}-windows-x64.zip
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-windows
+          path: ${{ matrix.app }}/${{ matrix.app }}-windows-x64.zip

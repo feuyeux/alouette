@@ -1,0 +1,43 @@
+name: Build Web
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch: # 允许手动触发
+  workflow_call: # 允许被其他 workflow 调用
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [alouette_app, alouette_app_trans, alouette_app_tts]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+
+      - name: Get dependencies
+        run: |
+          cd ${{ matrix.app }}
+          flutter pub get
+
+      - name: Build Web
+        run: |
+          cd ${{ matrix.app }}
+          flutter build web --release
+
+      - name: Create Web Archive
+        run: |
+          cd ${{ matrix.app }}/build/web
+          tar -czf ../../${{ matrix.app }}-web.tar.gz *
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-web
+          path: ${{ matrix.app }}/${{ matrix.app }}-web.tar.gz

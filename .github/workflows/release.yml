@@ -1,0 +1,101 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v* 标签时触发（如 v1.0.0）
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  # 并行运行所有平台构建
+  build-android:
+    uses: ./.github/workflows/build-android.yml
+  
+  build-ios:
+    uses: ./.github/workflows/build-ios.yml
+  
+  build-linux:
+    uses: ./.github/workflows/build-linux.yml
+  
+  build-macos:
+    uses: ./.github/workflows/build-macos.yml
+  
+  build-web:
+    uses: ./.github/workflows/build-web.yml
+  
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+
+  # 等待所有构建完成后创建 release
+  create-release:
+    needs: [build-android, build-ios, build-linux, build-macos, build-web, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Get tag name
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag_name=${{ inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag_name }}
+          name: Release ${{ steps.get_tag.outputs.tag_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Alouette Release ${{ steps.get_tag.outputs.tag_name }}
+            
+            ### 📦 Downloads
+            
+            #### alouette_app
+            - 🤖 Android: `alouette_app-android.apk`
+            - 🍎 iOS: `alouette_app-ios.ipa`
+            - 🐧 Linux: `alouette_app-linux-x64.tar.gz`
+            - 🍏 macOS: `alouette_app-macos.dmg`
+            - 🌐 Web: `alouette_app-web.zip`
+            - 🪟 Windows: `alouette_app-windows-x64.zip`
+            
+            #### alouette_app_trans (Translation App)
+            - 🤖 Android: `alouette_app_trans-android.apk`
+            - 🍎 iOS: `alouette_app_trans-ios.ipa`
+            - 🐧 Linux: `alouette_app_trans-linux-x64.tar.gz`
+            - 🍏 macOS: `alouette_app_trans-macos.dmg`
+            - 🌐 Web: `alouette_app_trans-web.zip`
+            - 🪟 Windows: `alouette_app_trans-windows-x64.zip`
+            
+            #### alouette_app_tts (Text-to-Speech App)
+            - 🤖 Android: `alouette_app_tts-android.apk`
+            - 🍎 iOS: `alouette_app_tts-ios.ipa`
+            - 🐧 Linux: `alouette_app_tts-linux-x64.tar.gz`
+            - 🍏 macOS: `alouette_app_tts-macos.dmg`
+            - 🌐 Web: `alouette_app_tts-web.zip`
+            - 🪟 Windows: `alouette_app_tts-windows-x64.zip`
+          files: |
+            artifacts/**/*.apk
+            artifacts/**/*.ipa
+            artifacts/**/*.tar.gz
+            artifacts/**/*.dmg
+            artifacts/**/*.zip

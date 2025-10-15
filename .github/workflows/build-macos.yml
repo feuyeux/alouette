@@ -1,0 +1,43 @@
+name: Build macOS
+
+on:
+  push:
+    tags:
+      - '*'
+  workflow_dispatch:  # 允许手动触发
+  workflow_call:  # 允许被其他 workflow 调用
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        app: [alouette_app, alouette_app_trans, alouette_app_tts]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+      
+      - name: Get dependencies
+        run: |
+          cd ${{ matrix.app }}
+          flutter pub get
+      
+      - name: Build macOS
+        run: |
+          cd ${{ matrix.app }}
+          flutter build macos --release
+      
+      - name: Create macOS Archive
+        run: |
+          cd ${{ matrix.app }}/build/macos/Build/Products/Release
+          zip -r ../../../../../${{ matrix.app }}-macos.zip *.app
+      
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-macos
+          path: ${{ matrix.app }}/${{ matrix.app }}-macos.zip

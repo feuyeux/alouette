@@ -1,0 +1,41 @@
+name: alouette_ui
+description: Shared UI components, themes, and service management for Alouette applications
+publish_to: "none"
+version: 0.0.1
+
+environment:
+  sdk: ">=3.8.1 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Service interfaces from functional libraries
+  alouette_lib_trans:
+    path: ../alouette_lib_trans
+  # TTS library - kept as dependency for TTS-related UI components
+  # Apps that don't need TTS (like alouette_app_trans) should simply not use TTS components
+  alouette_lib_tts:
+    path: ../alouette_lib_tts
+  # Persistent storage for configuration and preferences
+  shared_preferences: ^2.5.3
+  # Path provider for file operations
+  path_provider: ^2.1.5
+  # Meta annotations for better code analysis
+  meta: ^1.16.0
+  # Flag assets for platforms without emoji support
+  country_icons: ^3.0.0
+  # Standard logging library
+  logger: ^2.6.2
+  # Package info for getting app version
+  package_info_plus: ^8.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icons/
