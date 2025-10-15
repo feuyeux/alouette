@@ -6,24 +6,10 @@ A comprehensive Flutter ecosystem for AI-powered translation and text-to-speech 
 
 <div align="center">
   <a href="https://www.bilibili.com/video/BV14y4tz3EKr/">
-    <img src="https://i0.hdslb.com/bfs/archive/placeholder.jpg" alt="Alouette Demo Video" width="600">
+    <img src="https://via.placeholder.com/600x450/1890FF/FFFFFF?text=Click+to+Watch+Alouette+Demo" alt="Alouette Demo Video" width="600">
   </a>
   <br>
-  <strong><a href="https://www.bilibili.com/video/BV14y4tz3EKr/">🎬 Click to Watch Demo Video</a></strong>
-</div>
-
-<!-- Bilibili 嵌入播放器 (在支持 iframe 的环境中显示) -->
-<div align="center">
-  <iframe src="//player.bilibili.com/player.html?bvid=BV14y4tz3EKr&page=1&high_quality=1&danmaku=0" 
-          scrolling="no" 
-          border="0" 
-          frameborder="no" 
-          framespacing="0" 
-          allowfullscreen="true" 
-          width="600" 
-          height="450"
-          style="max-width: 100%;">
-  </iframe>
+  <strong><a href="https://www.bilibili.com/video/BV14y4tz3EKr/">🎬 Click to Watch Demo Video on Bilibili</a></strong>
 </div>
 
 ## 🏗️ Architecture Overview
