@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
 import 'package:alouette_lib_trans/alouette_lib_trans.dart';
 import 'package:alouette_lib_tts/alouette_tts.dart' as tts_lib;
 import '../constants/language_constants.dart';
 import '../core/logger.dart';
 import '../tokens/dimension_tokens.dart';
 import '../tokens/typography_tokens.dart';
+import '../utils/file_saver.dart';
 
 class TranslationResultWidget extends StatefulWidget {
   final TranslationService translationService;
@@ -174,7 +177,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
                 final translatedText = translation.translations[language] ?? '';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: _buildTranslationItem(context, language, translatedText),
+                  child:
+                      _buildTranslationItem(context, language, translatedText),
                 );
               },
             ),
@@ -210,7 +214,7 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     String getShortModelName(String fullName, {required bool isCompact}) {
       // 移除常见的后缀如 :latest
       String name = fullName.replaceFirst(':latest', '');
-      
+
       if (isCompact) {
         // 移动设备：激进简化，限制在20个字符
         if (name.length > 20) {
@@ -227,7 +231,7 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
           name = name.substring(0, 37) + '...';
         }
       }
-      
+
       return name;
     }
 
@@ -375,8 +379,7 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
   ) {
     final isPlaying = _playingStates[language] ?? false;
     final languageCode = _getLanguageCode(language);
-    final hasTTS =
-        widget.ttsService != null &&
+    final hasTTS = widget.ttsService != null &&
         widget.isTTSInitialized &&
         languageCode != null &&
         languageCode.isNotEmpty;
@@ -401,9 +404,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
               vertical: isCompactStyle ? 4 : 8,
             ),
             decoration: BoxDecoration(
-              color: isCompactStyle
-                  ? Colors.green.shade100
-                  : Colors.grey.shade100,
+              color:
+                  isCompactStyle ? Colors.green.shade100 : Colors.grey.shade100,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(7),
                 topRight: Radius.circular(7),
@@ -432,6 +434,20 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
                     onPressed: isPlaying
                         ? () => _stopTTS(language)
                         : () => _playTTS(language, translatedText),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  const SizedBox(width: 4),
+                  // Download audio button
+                  IconButton(
+                    icon: Icon(
+                      Icons.download,
+                      size: DimensionTokens.iconM,
+                      color: Colors.green,
+                    ),
+                    tooltip: 'Download audio',
+                    onPressed: () =>
+                        _downloadAudio(context, language, translatedText),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -476,13 +492,23 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
   Future<void> _playTTS(String language, String text) async {
     if (widget.ttsService == null) return;
 
-    // Reset all playing states (TTSService will handle stopping previous playback internally)
-    setState(() {
-      _playingStates.updateAll((key, value) => false);
-      _playingStates[language] = true;
-    });
-
     try {
+      // Stop any currently playing audio first
+      if (_audioPlayer != null) {
+        final state = _audioPlayer!.state;
+        if (state == tts_lib.PlaybackState.playing ||
+            state == tts_lib.PlaybackState.paused) {
+          await _audioPlayer!.stop();
+          logger.d('[TTS] Stopped previous playback');
+        }
+      }
+
+      // Reset all playing states
+      setState(() {
+        _playingStates.updateAll((key, value) => false);
+        _playingStates[language] = true;
+      });
+
       // Initialize audio player if needed
       _audioPlayer ??= tts_lib.AudioPlayer();
 
@@ -494,8 +520,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
       final availableVoices = voices
           .where(
             (voice) => voice.locale.toLowerCase().startsWith(
-              languageCode.toLowerCase().split('-')[0],
-            ),
+                  languageCode.toLowerCase().split('-')[0],
+                ),
           )
           .toList();
 
@@ -503,7 +529,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
         // 使用智能语音选择策略，选择最高质量的人声
         final matchingVoice = _selectBestVoice(availableVoices, languageCode);
 
-        logger.d('[TTS] Selected voice for $language: ${matchingVoice.name} (${matchingVoice.locale})');
+        logger.d(
+            '[TTS] Selected voice for $language: ${matchingVoice.name} (${matchingVoice.locale})');
 
         // Synthesize text to audio data
         final audioData = await widget.ttsService!.synthesizeText(
@@ -515,7 +542,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
         // In direct playback mode (Web/macOS), the TTS engine plays directly
         // and returns a minimal placeholder (≤10 bytes)
         if (audioData.length <= 10) {
-          logger.d('[TTS] Direct playback mode - audio already played for $language');
+          logger.d(
+              '[TTS] Direct playback mode - audio already played for $language');
           // Wait a bit to ensure playback completes
           await Future.delayed(const Duration(milliseconds: 500));
         } else {
@@ -525,7 +553,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
             logger.d('[TTS] File playback completed for $language');
           } catch (playbackError) {
             // If playback fails, clear cache and rethrow
-            logger.e('[TTS] Playback failed for $language, clearing cache', error: playbackError);
+            logger.e('[TTS] Playback failed for $language, clearing cache',
+                error: playbackError);
             // Clear cache for this specific text+voice combination to allow retry
             widget.ttsService!.clearAudioCacheItem(
               text,
@@ -535,7 +564,6 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
             rethrow;
           }
         }
-
       } else {
         logger.w('[TTS] No voices available for language code: $languageCode');
         if (mounted) {
@@ -582,7 +610,9 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     } catch (error) {
       logger.e('[TTS] Unexpected error playing $language TTS', error: error);
       // Only show error if it's not related to minimal audio data playback
-      if (mounted && !error.toString().contains('minimal') && !error.toString().contains('Direct playback')) {
+      if (mounted &&
+          !error.toString().contains('minimal') &&
+          !error.toString().contains('Direct playback')) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Cannot play $language audio'),
@@ -602,34 +632,38 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
 
   /// Stop TTS playback
   Future<void> _stopTTS(String language) async {
+    // Update UI state first to prevent multiple clicks
+    if (mounted) {
+      setState(() {
+        _playingStates[language] = false;
+      });
+    }
+
     try {
-      // Stop audio player
+      // Only stop audio player if it exists and is playing
       if (_audioPlayer != null) {
-        await _audioPlayer!.stop();
+        final state = _audioPlayer!.state;
+        if (state == tts_lib.PlaybackState.playing ||
+            state == tts_lib.PlaybackState.paused) {
+          await _audioPlayer!.stop();
+          logger.d('[TTS] Audio player stopped for $language');
+        }
       }
 
-      // Try to stop TTS service if supported
+      // Try to stop TTS service if supported (for direct playback mode)
       if (widget.ttsService != null) {
         try {
           await widget.ttsService!.stop();
+          logger.d('[TTS] TTS service stopped for $language');
         } catch (e) {
           // Some TTS engines may not support stopping, ignore errors
-          logger.d('[TTS] Stop not supported', error: e);
+          logger.d('[TTS] Stop not supported by TTS service', error: e);
         }
       }
     } catch (e) {
-      logger.e('[TTS] Error stopping TTS', error: e);
-    } finally {
-      // Update UI state
-      if (mounted) {
-        setState(() {
-          _playingStates[language] = false;
-        });
-      }
+      logger.e('[TTS] Error stopping TTS for $language', error: e);
     }
   }
-
-
 
   /// Get language code from language key (which may be code or name)
   String? _getLanguageCode(String languageKey) {
@@ -640,7 +674,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
       if (languageKey.contains('-')) {
         final parts = languageKey.split('-');
         if (parts.length == 2 && parts[0].length == 2) {
-          logger.d('[TTS] Language key $languageKey is already a language code');
+          logger
+              .d('[TTS] Language key $languageKey is already a language code');
           return languageKey.toLowerCase();
         }
       }
@@ -689,10 +724,9 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     }
 
     // 检查是否是 Edge TTS（通过语音名称模式识别）
-    final isEdgeTTS = voices.any((v) => 
-      v.name.contains('-') && 
-      (v.name.contains('Neural') || v.name.toLowerCase().contains('neural'))
-    );
+    final isEdgeTTS = voices.any((v) =>
+        v.name.contains('-') &&
+        (v.name.contains('Neural') || v.name.toLowerCase().contains('neural')));
 
     if (isEdgeTTS) {
       return _selectBestEdgeVoice(voices, languageCode);
@@ -711,7 +745,11 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     final preferredEdgeVoices = {
       'en-us': ['en-US-AriaNeural', 'en-US-JennyNeural', 'en-US-GuyNeural'],
       'en-gb': ['en-GB-SoniaNeural', 'en-GB-RyanNeural'],
-      'zh-cn': ['zh-CN-XiaoxiaoNeural', 'zh-CN-YunxiNeural', 'zh-CN-YunjianNeural'],
+      'zh-cn': [
+        'zh-CN-XiaoxiaoNeural',
+        'zh-CN-YunxiNeural',
+        'zh-CN-YunjianNeural'
+      ],
       'zh-tw': ['zh-TW-HsiaoChenNeural', 'zh-TW-YunJheNeural'],
       'ja-jp': ['ja-JP-NanamiNeural', 'ja-JP-KeitaNeural'],
       'ko-kr': ['ko-KR-SunHiNeural', 'ko-KR-InJoonNeural'],
@@ -740,10 +778,13 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     }
 
     // 第二轮：选择该语言的任意神经网络语音
-    final neuralVoices = voices.where(
-      (v) => v.locale.toLowerCase().startsWith(langKey.split('-')[0]) && 
-             (v.name.contains('Neural') || v.isNeural),
-    ).toList();
+    final neuralVoices = voices
+        .where(
+          (v) =>
+              v.locale.toLowerCase().startsWith(langKey.split('-')[0]) &&
+              (v.name.contains('Neural') || v.isNeural),
+        )
+        .toList();
 
     if (neuralVoices.isNotEmpty) {
       // 优先女声（通常更清晰自然）
@@ -756,12 +797,15 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     }
 
     // 第三轮：任何匹配语言的语音
-    final langMatches = voices.where(
-      (v) => v.locale.toLowerCase().startsWith(langKey.split('-')[0]),
-    ).toList();
+    final langMatches = voices
+        .where(
+          (v) => v.locale.toLowerCase().startsWith(langKey.split('-')[0]),
+        )
+        .toList();
 
     if (langMatches.isNotEmpty) {
-      logger.w('[TTS] Using Edge TTS fallback voice: ${langMatches.first.name}');
+      logger
+          .w('[TTS] Using Edge TTS fallback voice: ${langMatches.first.name}');
       return langMatches.first;
     }
 
@@ -808,9 +852,11 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     }
 
     // 第二轮：选择精确匹配语言代码的语音
-    final exactLocaleMatches = voices.where(
-      (v) => v.locale.toLowerCase() == langKey,
-    ).toList();
+    final exactLocaleMatches = voices
+        .where(
+          (v) => v.locale.toLowerCase() == langKey,
+        )
+        .toList();
 
     if (exactLocaleMatches.isNotEmpty) {
       // 优先增强版
@@ -835,6 +881,123 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     // 第三轮：语言匹配的第一个语音
     logger.w('[TTS] Using Flutter TTS fallback voice: ${voices.first.name}');
     return voices.first;
+  }
+
+  /// Download audio file for the given language and text
+  Future<void> _downloadAudio(
+      BuildContext context, String language, String text) async {
+    if (widget.ttsService == null) return;
+
+    try {
+      // Get language code and find matching voice
+      final languageCode = _getLanguageCode(language);
+      if (languageCode == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cannot determine language code for $language'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      final voices = await widget.ttsService!.getVoices();
+      final availableVoices = voices
+          .where(
+            (voice) => voice.locale.toLowerCase().startsWith(
+                  languageCode.toLowerCase().split('-')[0],
+                ),
+          )
+          .toList();
+
+      if (availableVoices.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No voices available for $language'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      final matchingVoice = _selectBestVoice(availableVoices, languageCode);
+      logger.d(
+          '[TTS] Downloading audio for $language with voice: ${matchingVoice.name}');
+
+      // Synthesize text to audio data
+      final audioData = await widget.ttsService!.synthesizeText(
+        text,
+        matchingVoice.name,
+      );
+
+      // Check if this is minimal audio data (direct playback mode)
+      if (audioData.length <= 10) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Audio download not supported in web browser'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Save audio file based on platform
+      final fileName = await _saveAudioFile(audioData, language);
+
+      if (mounted) {
+        final message = kIsWeb
+            ? '$language audio saved to Downloads folder as $fileName'
+            : '$language audio saved as $fileName';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } on tts_lib.TTSError catch (e) {
+      logger.e('[TTS] Download error for $language: ${e.message}');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to download $language audio'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (error) {
+      logger.e('[TTS] Unexpected download error for $language', error: error);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cannot download $language audio'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Save audio file to device/browser
+  /// Returns the file name for user feedback
+  Future<String> _saveAudioFile(Uint8List audioData, String language) async {
+    final fileName =
+        'alouette_${language}_${DateTime.now().millisecondsSinceEpoch}.mp3';
+    await FileSaver.saveFile(audioData, fileName, 'audio/mpeg');
+    logger.i('[TTS] Audio saved: $fileName');
+    return fileName;
   }
 
   void _copyTranslation(

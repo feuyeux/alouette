@@ -4,13 +4,10 @@ A comprehensive Flutter ecosystem for AI-powered translation and text-to-speech 
 
 ## 📺 Demo
 
-<div align="center">
-  <a href="https://www.bilibili.com/video/BV14y4tz3EKr/">
-    <img src="https://via.placeholder.com/600x450/1890FF/FFFFFF?text=Click+to+Watch+Alouette+Demo" alt="Alouette Demo Video" width="600">
-  </a>
-  <br>
-  <strong><a href="https://www.bilibili.com/video/BV14y4tz3EKr/">🎬 Click to Watch Demo Video on Bilibili</a></strong>
-</div>
+[![Alouette Demo](https://img.youtube.com/vi/fW_EiLVNg2c/0.jpg)](https://www.youtube.com/watch?v=fW_EiLVNg2c)
+
+[![Alouette Demo](https://img.youtube.com/vi/i1oZ-tyjZh0/0.jpg)](https://www.youtube.com/watch?v=i1oZ-tyjZh0)
+
 
 ## 🏗️ Architecture Overview
 
