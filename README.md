@@ -8,7 +8,6 @@ A comprehensive Flutter ecosystem for AI-powered translation and text-to-speech 
 
 [![Alouette Demo](https://img.youtube.com/vi/i1oZ-tyjZh0/0.jpg)](https://www.youtube.com/watch?v=i1oZ-tyjZh0)
 
-
 ## 🏗️ Architecture Overview
 
 Alouette follows a layered architecture with clear separation of concerns:

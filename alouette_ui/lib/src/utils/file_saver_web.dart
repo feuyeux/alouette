@@ -1,6 +1,6 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
 import 'dart:typed_data';
+import 'package:web/web.dart' as web;
 
 /// Web implementation of file saver
 class FileSaver {
@@ -9,11 +9,15 @@ class FileSaver {
     String fileName,
     String mimeType,
   ) async {
-    final blob = html.Blob([data], mimeType);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    html.AnchorElement(href: url)
-      ..setAttribute('download', fileName)
-      ..click();
-    html.Url.revokeObjectUrl(url);
+    final blob = web.Blob(
+      [data.toJS].toJS,
+      web.BlobPropertyBag(type: mimeType),
+    );
+    final url = web.URL.createObjectURL(blob);
+    final anchor = web.document.createElement('a') as web.HTMLAnchorElement
+      ..href = url
+      ..download = fileName;
+    anchor.click();
+    web.URL.revokeObjectURL(url);
   }
 }

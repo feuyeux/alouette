@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:typed_data';
 import 'package:alouette_lib_trans/alouette_lib_trans.dart';
 import 'package:alouette_lib_tts/alouette_tts.dart' as tts_lib;
 import '../constants/language_constants.dart';
@@ -177,8 +176,11 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
                 final translatedText = translation.translations[language] ?? '';
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child:
-                      _buildTranslationItem(context, language, translatedText),
+                  child: _buildTranslationItem(
+                    context,
+                    language,
+                    translatedText,
+                  ),
                 );
               },
             ),
@@ -379,7 +381,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
   ) {
     final isPlaying = _playingStates[language] ?? false;
     final languageCode = _getLanguageCode(language);
-    final hasTTS = widget.ttsService != null &&
+    final hasTTS =
+        widget.ttsService != null &&
         widget.isTTSInitialized &&
         languageCode != null &&
         languageCode.isNotEmpty;
@@ -404,8 +407,9 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
               vertical: isCompactStyle ? 4 : 8,
             ),
             decoration: BoxDecoration(
-              color:
-                  isCompactStyle ? Colors.green.shade100 : Colors.grey.shade100,
+              color: isCompactStyle
+                  ? Colors.green.shade100
+                  : Colors.grey.shade100,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(7),
                 topRight: Radius.circular(7),
@@ -438,20 +442,21 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
                     constraints: const BoxConstraints(),
                   ),
                   const SizedBox(width: 4),
-                  // Download audio button
-                  IconButton(
-                    icon: Icon(
-                      Icons.download,
-                      size: DimensionTokens.iconM,
-                      color: Colors.green,
+                  // Download audio button (not supported on Web)
+                  if (!kIsWeb)
+                    IconButton(
+                      icon: Icon(
+                        Icons.download,
+                        size: DimensionTokens.iconM,
+                        color: Colors.green,
+                      ),
+                      tooltip: 'Download audio',
+                      onPressed: () =>
+                          _downloadAudio(context, language, translatedText),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
-                    tooltip: 'Download audio',
-                    onPressed: () =>
-                        _downloadAudio(context, language, translatedText),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                  const SizedBox(width: 4),
+                  if (!kIsWeb) const SizedBox(width: 4),
                 ],
                 // Copy button
                 IconButton(
@@ -520,8 +525,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
       final availableVoices = voices
           .where(
             (voice) => voice.locale.toLowerCase().startsWith(
-                  languageCode.toLowerCase().split('-')[0],
-                ),
+              languageCode.toLowerCase().split('-')[0],
+            ),
           )
           .toList();
 
@@ -530,7 +535,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
         final matchingVoice = _selectBestVoice(availableVoices, languageCode);
 
         logger.d(
-            '[TTS] Selected voice for $language: ${matchingVoice.name} (${matchingVoice.locale})');
+          '[TTS] Selected voice for $language: ${matchingVoice.name} (${matchingVoice.locale})',
+        );
 
         // Synthesize text to audio data
         final audioData = await widget.ttsService!.synthesizeText(
@@ -543,7 +549,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
         // and returns a minimal placeholder (≤10 bytes)
         if (audioData.length <= 10) {
           logger.d(
-              '[TTS] Direct playback mode - audio already played for $language');
+            '[TTS] Direct playback mode - audio already played for $language',
+          );
           // Wait a bit to ensure playback completes
           await Future.delayed(const Duration(milliseconds: 500));
         } else {
@@ -553,8 +560,10 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
             logger.d('[TTS] File playback completed for $language');
           } catch (playbackError) {
             // If playback fails, clear cache and rethrow
-            logger.e('[TTS] Playback failed for $language, clearing cache',
-                error: playbackError);
+            logger.e(
+              '[TTS] Playback failed for $language, clearing cache',
+              error: playbackError,
+            );
             // Clear cache for this specific text+voice combination to allow retry
             widget.ttsService!.clearAudioCacheItem(
               text,
@@ -674,8 +683,9 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
       if (languageKey.contains('-')) {
         final parts = languageKey.split('-');
         if (parts.length == 2 && parts[0].length == 2) {
-          logger
-              .d('[TTS] Language key $languageKey is already a language code');
+          logger.d(
+            '[TTS] Language key $languageKey is already a language code',
+          );
           return languageKey.toLowerCase();
         }
       }
@@ -724,9 +734,12 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
     }
 
     // 检查是否是 Edge TTS（通过语音名称模式识别）
-    final isEdgeTTS = voices.any((v) =>
-        v.name.contains('-') &&
-        (v.name.contains('Neural') || v.name.toLowerCase().contains('neural')));
+    final isEdgeTTS = voices.any(
+      (v) =>
+          v.name.contains('-') &&
+          (v.name.contains('Neural') ||
+              v.name.toLowerCase().contains('neural')),
+    );
 
     if (isEdgeTTS) {
       return _selectBestEdgeVoice(voices, languageCode);
@@ -748,7 +761,7 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
       'zh-cn': [
         'zh-CN-XiaoxiaoNeural',
         'zh-CN-YunxiNeural',
-        'zh-CN-YunjianNeural'
+        'zh-CN-YunjianNeural',
       ],
       'zh-tw': ['zh-TW-HsiaoChenNeural', 'zh-TW-YunJheNeural'],
       'ja-jp': ['ja-JP-NanamiNeural', 'ja-JP-KeitaNeural'],
@@ -798,14 +811,13 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
 
     // 第三轮：任何匹配语言的语音
     final langMatches = voices
-        .where(
-          (v) => v.locale.toLowerCase().startsWith(langKey.split('-')[0]),
-        )
+        .where((v) => v.locale.toLowerCase().startsWith(langKey.split('-')[0]))
         .toList();
 
     if (langMatches.isNotEmpty) {
-      logger
-          .w('[TTS] Using Edge TTS fallback voice: ${langMatches.first.name}');
+      logger.w(
+        '[TTS] Using Edge TTS fallback voice: ${langMatches.first.name}',
+      );
       return langMatches.first;
     }
 
@@ -853,9 +865,7 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
 
     // 第二轮：选择精确匹配语言代码的语音
     final exactLocaleMatches = voices
-        .where(
-          (v) => v.locale.toLowerCase() == langKey,
-        )
+        .where((v) => v.locale.toLowerCase() == langKey)
         .toList();
 
     if (exactLocaleMatches.isNotEmpty) {
@@ -884,8 +894,15 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
   }
 
   /// Download audio file for the given language and text
+  /// Not supported on Web platform
   Future<void> _downloadAudio(
-      BuildContext context, String language, String text) async {
+    BuildContext context,
+    String language,
+    String text,
+  ) async {
+    // Web platform doesn't support audio download
+    if (kIsWeb) return;
+
     if (widget.ttsService == null) return;
 
     try {
@@ -908,8 +925,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
       final availableVoices = voices
           .where(
             (voice) => voice.locale.toLowerCase().startsWith(
-                  languageCode.toLowerCase().split('-')[0],
-                ),
+              languageCode.toLowerCase().split('-')[0],
+            ),
           )
           .toList();
 
@@ -928,7 +945,8 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
 
       final matchingVoice = _selectBestVoice(availableVoices, languageCode);
       logger.d(
-          '[TTS] Downloading audio for $language with voice: ${matchingVoice.name}');
+        '[TTS] Downloading audio for $language with voice: ${matchingVoice.name}',
+      );
 
       // Synthesize text to audio data
       final audioData = await widget.ttsService!.synthesizeText(
@@ -936,30 +954,13 @@ class _TranslationResultWidgetState extends State<TranslationResultWidget> {
         matchingVoice.name,
       );
 
-      // Check if this is minimal audio data (direct playback mode)
-      if (audioData.length <= 10) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Audio download not supported in web browser'),
-              backgroundColor: Colors.orange,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Save audio file based on platform
+      // Save audio file
       final fileName = await _saveAudioFile(audioData, language);
 
       if (mounted) {
-        final message = kIsWeb
-            ? '$language audio saved to Downloads folder as $fileName'
-            : '$language audio saved as $fileName';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(message),
+            content: Text('$language audio saved as $fileName'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
           ),

@@ -29,6 +29,8 @@ dependencies:
   logger: ^2.6.2
   # Package info for getting app version
   package_info_plus: ^8.1.2
+  # Web interop for modern web APIs
+  web: ^1.1.0
 
 dev_dependencies:
   flutter_test:
